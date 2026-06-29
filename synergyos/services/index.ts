@@ -1,17 +1,21 @@
+import { customersService } from '@/services/customers.service';
+import { inventoryService as inventoryDbService } from '@/services/inventory.service';
+import { ordersService } from '@/services/orders.service';
+import { productsService } from '@/services/products.service';
 import { createMockProvider } from '@/services/provider';
 
 const provider = createMockProvider();
 
 export const orderService = {
-  list: () => provider.getOrders(),
+  list: () => ordersService.list(),
 };
 
 export const customerService = {
-  list: () => provider.getCustomers(),
+  list: () => customersService.list(),
 };
 
 export const productService = {
-  list: () => provider.getProducts(),
+  list: () => productsService.list(),
 };
 
 export const warehouseService = {
@@ -27,7 +31,7 @@ export const userService = {
 };
 
 export const inventoryService = {
-  list: () => provider.getInventory(),
+  list: () => inventoryDbService.list(),
 };
 
 export const dataProvider = provider;

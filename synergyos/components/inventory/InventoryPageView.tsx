@@ -5,7 +5,85 @@ import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { InventoryToolbar } from "@/components/inventory/InventoryToolbar";
 import { mockInventoryItems } from "@/lib/inventory/mockData";
 
-export function InventoryPageView() {
+type InventoryPageCopy = {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  toolbar: {
+    newProduct: string;
+    stockIn: string;
+    stockOut: string;
+    transfer: string;
+    history: string;
+  };
+  filters: {
+    searchLabel: string;
+    searchPlaceholder: string;
+    barcodeLabel: string;
+    barcodePlaceholder: string;
+  };
+  stats: {
+    warehouseLocations: string;
+    lowStockItems: string;
+    reservedToday: string;
+  };
+  table: {
+    product: string;
+    location: string;
+    current: string;
+    reserved: string;
+    available: string;
+    minimum: string;
+    status: string;
+  };
+  statuses: {
+    inStock: string;
+    lowStock: string;
+    critical: string;
+    reserved: string;
+  };
+};
+
+const defaultCopy: InventoryPageCopy = {
+  eyebrow: 'Inventory module',
+  title: 'Inventory overview',
+  subtitle: 'Monitor stock health, reserved quantities, and movement activity across warehouse locations.',
+  toolbar: {
+    newProduct: 'New Product',
+    stockIn: 'Stock In',
+    stockOut: 'Stock Out',
+    transfer: 'Transfer',
+    history: 'Inventory History',
+  },
+  filters: {
+    searchLabel: 'Search inventory',
+    searchPlaceholder: 'Search by name, SKU, category, or location',
+    barcodeLabel: 'Barcode search',
+    barcodePlaceholder: 'Scan or enter barcode',
+  },
+  stats: {
+    warehouseLocations: 'Warehouse locations',
+    lowStockItems: 'Low stock items',
+    reservedToday: 'Reserved today',
+  },
+  table: {
+    product: 'Product',
+    location: 'Location',
+    current: 'Current',
+    reserved: 'Reserved',
+    available: 'Available',
+    minimum: 'Minimum',
+    status: 'Status',
+  },
+  statuses: {
+    inStock: 'In stock',
+    lowStock: 'Low stock',
+    critical: 'Critical',
+    reserved: 'Reserved',
+  },
+};
+
+export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPageCopy }) {
   const [search, setSearch] = useState("");
   const [barcodeSearch, setBarcodeSearch] = useState("");
 
@@ -25,35 +103,35 @@ export function InventoryPageView() {
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.32em] text-cyan-400">Inventory module</p>
-            <h1 className="mt-2 text-3xl font-semibold text-white">Inventory overview</h1>
-            <p className="mt-2 text-sm text-slate-400">Monitor stock health, reserved quantities, and movement activity across warehouse locations.</p>
+            <p className="text-sm font-medium uppercase tracking-[0.32em] text-cyan-400">{copy.eyebrow}</p>
+            <h1 className="mt-2 text-3xl font-semibold text-white">{copy.title}</h1>
+            <p className="mt-2 text-sm text-slate-400">{copy.subtitle}</p>
           </div>
           <InventoryToolbar buttons={[
-            { label: "New Product" },
-            { label: "Stock In" },
-            { label: "Stock Out" },
-            { label: "Transfer" },
-            { label: "Inventory History" },
+            { label: copy.toolbar.newProduct },
+            { label: copy.toolbar.stockIn },
+            { label: copy.toolbar.stockOut },
+            { label: copy.toolbar.transfer },
+            { label: copy.toolbar.history },
           ]} />
         </div>
 
         <section className="mb-6 grid gap-4 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40 lg:grid-cols-[1.2fr_0.8fr]">
           <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-300">Search inventory</span>
+            <span className="mb-2 block text-sm font-medium text-slate-300">{copy.filters.searchLabel}</span>
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by name, SKU, category, or location"
+              placeholder={copy.filters.searchPlaceholder}
               className="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none ring-0 transition focus:border-cyan-400"
             />
           </label>
           <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-300">Barcode search</span>
+            <span className="mb-2 block text-sm font-medium text-slate-300">{copy.filters.barcodeLabel}</span>
             <input
               value={barcodeSearch}
               onChange={(event) => setBarcodeSearch(event.target.value)}
-              placeholder="Scan or enter barcode"
+              placeholder={copy.filters.barcodePlaceholder}
               className="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none ring-0 transition focus:border-cyan-400"
             />
           </label>
@@ -61,20 +139,20 @@ export function InventoryPageView() {
 
         <div className="mb-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/40">
-            <p className="text-sm text-slate-400">Warehouse locations</p>
+            <p className="text-sm text-slate-400">{copy.stats.warehouseLocations}</p>
             <p className="mt-2 text-3xl font-semibold text-white">4</p>
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/40">
-            <p className="text-sm text-slate-400">Low stock items</p>
+            <p className="text-sm text-slate-400">{copy.stats.lowStockItems}</p>
             <p className="mt-2 text-3xl font-semibold text-white">2</p>
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/40">
-            <p className="text-sm text-slate-400">Reserved today</p>
+            <p className="text-sm text-slate-400">{copy.stats.reservedToday}</p>
             <p className="mt-2 text-3xl font-semibold text-white">39</p>
           </div>
         </div>
 
-        <InventoryTable items={filteredItems} />
+        <InventoryTable items={filteredItems} labels={{ headers: copy.table, statuses: copy.statuses }} />
       </div>
     </main>
   );

@@ -3,6 +3,7 @@ import { Form, FormField, FormRow } from '@/components/ui/Form';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { getDictionary } from '@/lib/i18n/dictionaries';
 import { generateLocaleParams, getLocaleFromParams, type LocalePageProps } from '@/app/[locale]/_shared';
 
 export function generateStaticParams() {
@@ -10,35 +11,36 @@ export function generateStaticParams() {
 }
 
 export default async function LocaleSettingsPage({ params }: LocalePageProps) {
-  await getLocaleFromParams(params);
+  const locale = await getLocaleFromParams(params);
+  const dictionary = getDictionary(locale);
 
   return (
     <Card
-      title="Settings"
-      subtitle="Global defaults for operations, notifications, and profile preferences."
-      action={<StatusBadge label="Configuration" tone="amber" />}
+      title={dictionary.modules.settings.title}
+      subtitle={dictionary.modules.settings.subtitle}
+      action={<StatusBadge label={dictionary.modules.settings.badge} tone="amber" />}
     >
-      <Form title="Workspace profile" description="Example form primitives from the global design system.">
+      <Form title={dictionary.modules.settings.form.title} description={dictionary.modules.settings.form.description}>
         <FormRow columns={2}>
-          <FormField label="Workspace name">
-            <Input placeholder="Synergy Fulfillment" />
+          <FormField label={dictionary.modules.settings.form.workspaceName}>
+            <Input placeholder={dictionary.modules.settings.form.workspaceNamePlaceholder} />
           </FormField>
-          <FormField label="Default locale">
-            <Input placeholder="en-US" />
+          <FormField label={dictionary.modules.settings.form.defaultLocale}>
+            <Input placeholder={dictionary.modules.settings.form.defaultLocalePlaceholder} />
           </FormField>
         </FormRow>
         <FormRow columns={2}>
-          <FormField label="Operations email" hint="Used for system alerts and escalations.">
-            <Input type="email" placeholder="ops@synergyos.com" />
+          <FormField label={dictionary.modules.settings.form.operationsEmail} hint={dictionary.modules.settings.form.operationsEmailHint}>
+            <Input type="email" placeholder={dictionary.modules.settings.form.operationsEmailPlaceholder} />
           </FormField>
-          <FormField label="Daily cut-off time">
+          <FormField label={dictionary.modules.settings.form.dailyCutoffTime}>
             <Input type="time" defaultValue="16:00" />
           </FormField>
         </FormRow>
         <div className="flex gap-3">
-          <Button type="button">Save changes</Button>
+          <Button type="button">{dictionary.modules.settings.form.saveChanges}</Button>
           <Button type="button" variant="ghost">
-            Cancel
+            {dictionary.modules.settings.form.cancel}
           </Button>
         </div>
       </Form>

@@ -1,0 +1,142 @@
+const cs = {
+  navigation: {
+    brand: "SynergyOS",
+    subtitle: "AI Fulfillment Platform",
+    sections: {
+      dashboard: "Přehled",
+      orders: "Objednávky",
+      warehouse: "Sklad",
+      crm: "CRM",
+      transport: "Doprava",
+      finance: "Finance",
+      ai: "AI Command Center",
+    },
+    languageLabel: "Jazyk",
+    languageSwitcher: {
+      cs: "Česky",
+      en: "English",
+    },
+  },
+  dashboard: {
+    eyebrow: "Fulfillment command center",
+    title: "Přehled operací",
+    subtitle: "Přehled objednávek, výkonu a stavu dopravy napříč celou sítí.",
+    cta: "+ Vytvořit běh fulfillmentu",
+    kpis: {
+      ordersToday: {
+        label: "Dnešní objednávky",
+        change: "+12 % oproti včera",
+      },
+      readyToPack: {
+        label: "K zabalení",
+        change: "6 urgentních",
+      },
+      shippedToday: {
+        label: "Dnes odesláno",
+        change: "+8 % efektivity",
+      },
+      returns: {
+        label: "Vrácené zásilky",
+        change: "1 čeká na kontrolu",
+      },
+    },
+    revenue: {
+      title: "Trend příjmů",
+      subtitle: "Posledních 7 dní",
+      change: "+18,4 % za měsíc",
+    },
+    occupancy: {
+      title: "Obsazenost skladu",
+      subtitle: "Aktuální kapacita",
+      badge: "V pořádku",
+      label: "2 340 / 3 000 míst",
+      description: "Pikový provoz je na 78 % kapacity.",
+      peak: "Špička",
+      peakDescription: "11:00–14:00, doporučeno 2 další pracovníci.",
+    },
+    ordersOverTime: {
+      title: "Objednávky v čase",
+      subtitle: "Denní průtok",
+    },
+    carrierStats: {
+      title: "Statistiky dopravců",
+      subtitle: "Preferovaná směs doručení",
+    },
+    topCustomers: {
+      title: "Nejlepší zákazníci",
+      subtitle: "Největší přispěvatelé k příjmům",
+      action: "Tento kvartál",
+    },
+    recentOrders: {
+      title: "Poslední objednávky",
+      subtitle: "Poslední aktivita fulfillmentu",
+    },
+    quickActions: {
+      title: "Rychlé akce",
+      subtitle: "Zrychlete každodenní provoz",
+      batchLabels: {
+        title: "Hromadný tisk štítků",
+        description: "Vytiskněte 24 čekajících štítků najednou",
+      },
+      reassignCarrier: {
+        title: "Přesunout dopravce",
+        description: "Optimalizujte zpožděné zásilky na rychlejší trasu",
+      },
+      approveReturns: {
+        title: "Schválit vrácení",
+        description: "Zkontrolujte tři výjimky před koncem dne",
+      },
+    },
+    notifications: {
+      title: "Notifikace",
+      subtitle: "Aktualizace týmu",
+      items: [
+        {
+          title: "Upozornění na sklad",
+          text: "4 položky pod bodem objednání",
+          time: "před 12 min",
+        },
+        {
+          title: "Zpoždění dopravce",
+          text: "Kongesce v centru DPD v Praze",
+          time: "před 34 min",
+        },
+        {
+          title: "Nová vrácená zásilka",
+          text: "Jedna objednávka čeká na kontrolu kvality",
+          time: "před 1 h",
+        },
+      ],
+    },
+    placeholder: {
+      title: "Tento modul je připraven pro další krok v roadmapě produktu SynergyOS.",
+    },
+    chartLabels: {
+      mon: "Po",
+      tue: "Út",
+      wed: "St",
+      thu: "Čt",
+      fri: "Pá",
+      sat: "So",
+      sun: "Ne",
+    },
+    table: {
+      customer: "Zákazník",
+      revenue: "Příjmy",
+      orders: "Objednávky",
+      tier: "Tier",
+      order: "Objednávka",
+      carrier: "Dopravce",
+      status: "Stav",
+      time: "Čas",
+    },
+    orderStatuses: {
+      packed: "Zabalená",
+      inTransit: "Na cestě",
+      ready: "Připravená",
+      queued: "Ve frontě",
+    },
+  },
+};
+
+export default cs;

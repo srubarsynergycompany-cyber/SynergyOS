@@ -3,9 +3,12 @@
 type SidebarProps = {
   active: string;
   setActive: (section: string) => void;
+  sections?: string[];
+  brand?: string;
+  subtitle?: string;
 };
 
-const sections = [
+const defaultSections = [
   "Dashboard",
   "Objednávky",
   "Sklad",
@@ -15,11 +18,17 @@ const sections = [
   "AI Command Center",
 ];
 
-export default function Sidebar({ active, setActive }: SidebarProps) {
+export default function Sidebar({
+  active,
+  setActive,
+  sections = defaultSections,
+  brand = "SynergyOS",
+  subtitle = "AI Fulfillment Platform",
+}: SidebarProps) {
   return (
     <aside className="w-64 border-r border-slate-800 bg-slate-900 p-6">
-      <h1 className="text-2xl font-bold">SynergyOS</h1>
-      <p className="mt-2 text-sm text-slate-400">AI Fulfillment Platform</p>
+      <h1 className="text-2xl font-bold">{brand}</h1>
+      <p className="mt-2 text-sm text-slate-400">{subtitle}</p>
 
       <nav className="mt-10 space-y-3 text-sm">
         {sections.map((section) => (

@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useBreadcrumbs } from '@/hooks/useBreadcrumbs';
-import { navigationItems } from '@/utils/navigation';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { detectLocaleFromPath, getShellNavigationItems, shellNavigationConfig } from '@/utils/navigation';
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -14,12 +15,24 @@ type AppShellProps = {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const breadcrumbs = useBreadcrumbs(pathname);
+  const locale = useMemo(() => detectLocaleFromPath(pathname), [pathname]);
+  const dictionary = useMemo(() => getDictionary(locale ?? 'en'), [locale]);
+  const navigationItems = useMemo(() => getShellNavigationItems(locale), [locale]);
+  const breadcrumbRouteMap = useMemo(
+    () =>
+      shellNavigationConfig.reduce<Record<string, string>>((acc, item) => {
+        acc[item.href] = dictionary.navigation.globalNav[item.key];
+        return acc;
+      }, {}),
+    [dictionary],
+  );
+  const breadcrumbs = useBreadcrumbs(pathname, breadcrumbRouteMap);
 
   const activeItem = useMemo(() => {
-    const normalized = pathname === '/' ? '/dashboard' : pathname;
-    return navigationItems.find((item) => item.href === normalized || item.href.replace(/\/$/, '') === normalized.replace(/\/$/, ''))?.href ?? '/';
-  }, [pathname]);
+    const normalizedPath = locale ? pathname.replace(/^\/(cs|en)(?=\/|$)/, '') || '/' : pathname;
+    const normalized = normalizedPath === '/' ? '/dashboard' : normalizedPath;
+    return shellNavigationConfig.find((item) => item.href === normalized || item.href.replace(/\/$/, '') === normalized.replace(/\/$/, ''))?.href ?? '/dashboard';
+  }, [pathname, locale]);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.16),_transparent_28%),linear-gradient(135deg,_#020617,_#0f172a)] text-slate-100">
@@ -37,7 +50,7 @@ export function AppShell({ children }: AppShellProps) {
 
           <nav className={`${mobileOpen ? 'block' : 'hidden'} space-y-2 px-3 pb-4 lg:block lg:px-4 lg:pb-6`}>
             {navigationItems.map((item) => {
-              const isActive = item.href === activeItem;
+              const isActive = item.key === shellNavigationConfig.find((entry) => entry.href === activeItem)?.key;
               return (
                 <Link
                   key={item.href}
@@ -60,7 +73,7 @@ export function AppShell({ children }: AppShellProps) {
               <div>
                 <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
                   {navigationItems.map((item) => {
-                    const isActive = item.href === activeItem;
+                    const isActive = item.key === shellNavigationConfig.find((entry) => entry.href === activeItem)?.key;
                     return (
                       <Link
                         key={`top-${item.href}`}

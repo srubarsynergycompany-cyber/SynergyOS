@@ -25,6 +25,10 @@ export type Order = {
   promiseDate: string;
   salesChannel: "Shopify" | "Shoptet";
   paymentStatus: "Paid" | "Pending" | "Awaiting";
+  pickerName?: string;
+  pickedAt?: string;
+  packedAt?: string;
+  shippedAt?: string;
   products: Array<{
     sku: string;
     name: string;

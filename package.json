@@ -1,0 +1,25 @@
+{
+  "name": "synergyos",
+  "version": "1.0.0",
+  "description": "SynergyOS is the central operating system for Synergy Company.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/srubarsynergycompany-cyber/SynergyOS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/srubarsynergycompany-cyber/SynergyOS/issues"
+  },
+  "homepage": "https://github.com/srubarsynergycompany-cyber/SynergyOS#readme"
+}

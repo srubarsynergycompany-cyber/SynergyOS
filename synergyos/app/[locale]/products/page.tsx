@@ -1,6 +1,7 @@
-import { ModulePage } from '@/components/layout/ModulePage';
+import ProductsModule from '@/components/products/ProductsModule';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { generateLocaleParams, getLocaleFromParams, type LocalePageProps } from '@/app/[locale]/_shared';
+import { customerService } from '@/services';
 
 export function generateStaticParams() {
   return generateLocaleParams();
@@ -9,15 +10,13 @@ export function generateStaticParams() {
 export default async function LocaleProductsPage({ params }: LocalePageProps) {
   const locale = await getLocaleFromParams(params);
   const dictionary = getDictionary(locale);
+  const customers = await customerService.list();
+
   return (
-    <ModulePage
-      title={dictionary.modules.products.title}
-      description={dictionary.modules.products.description}
-      badgeLabel={dictionary.modules.modulePage.badge}
-      readySuffix={dictionary.modules.modulePage.readySuffix}
-      readyDescription={dictionary.modules.modulePage.readyDescription}
-      goToDashboardLabel={dictionary.modules.modulePage.goToDashboard}
-      dashboardHref={`/${locale}/dashboard`}
+    <ProductsModule
+      dictionary={dictionary}
+      locale={locale}
+      customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
     />
   );
 }

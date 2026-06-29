@@ -21,11 +21,29 @@ export interface Customer {
 export interface Product {
   id: string;
   sku: string;
+  eanBarcode: string;
   name: string;
+  description: string;
+  customerId: string;
+  customerName: string;
   category: string;
+  weight: number;
+  width: number;
+  height: number;
+  length: number;
+  minimumStock: number;
+  currentStock: number;
+  unit: string;
   price: number;
   currency: string;
   active: boolean;
+  warehousePositions?: string[];
+  batches?: string[];
+  expirationDates?: string[];
+  images?: string[];
+  attachments?: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WarehouseLocation {

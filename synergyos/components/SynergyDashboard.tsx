@@ -3,6 +3,7 @@
 import { useState } from "react";
 import LanguageSwitcher from "@/lib/i18n/LanguageSwitcher";
 import Sidebar from "@/components/Sidebar";
+import OrdersModule from "@/components/OrdersModule";
 import type { Dictionary } from "@/lib/i18n/types";
 import type { Locale } from "@/lib/i18n/types";
 
@@ -107,7 +108,9 @@ export default function SynergyDashboard({ dictionary, locale }: SynergyDashboar
         />
 
         <section className="flex-1 p-4 sm:p-6 lg:p-8">
-          {active === dictionary.navigation.sections.dashboard ? (
+          {active === dictionary.navigation.sections.orders ? (
+            <OrdersModule dictionary={dictionary} locale={locale} />
+          ) : active === dictionary.navigation.sections.dashboard ? (
             <div className="space-y-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>

@@ -98,17 +98,17 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
   const [timeline, setTimeline] = useState<TimelineEntry[]>([
     {
       id: "created",
-      label: dictionary?.orders?.detail?.timeline?.created ?? "Order created",
+      label: dictionary?.orders?.detail?.timeline?.created ?? "Objednavka vytvorena",
       timestamp: order.createdAt,
     },
     {
       id: "updated",
-      label: dictionary?.orders?.detail?.timeline?.updated ?? "Order updated",
+      label: dictionary?.orders?.detail?.timeline?.updated ?? "Objednavka aktualizovana",
       timestamp: order.updatedAt,
     },
     {
       id: "payment",
-      label: dictionary?.orders?.detail?.timeline?.payment ?? "Payment confirmed",
+      label: dictionary?.orders?.detail?.timeline?.payment ?? "Platba potvrzena",
       timestamp: order.updatedAt,
     },
   ]);
@@ -123,21 +123,36 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     "cancelled",
   ];
 
-  const statusLabelMap: Record<WorkspaceStatus, string> = {
-    new: dictionary?.orders?.statuses?.new ?? "New",
-    ready_for_picking: locale === "cs" ? "Pripraveno ke sberu" : "Ready for Picking",
-    picking: dictionary?.orders?.statuses?.picking ?? "Picking",
-    packed: dictionary?.orders?.statuses?.packed ?? "Packed",
-    ready_to_ship: locale === "cs" ? "Pripraveno k odeslani" : "Ready to Ship",
-    shipped: dictionary?.orders?.statuses?.shipped ?? "Shipped",
-    cancelled: locale === "cs" ? "Zruseno" : "Cancelled",
-  };
+  function getPriorityDisplay(value: Order["priority"]) {
+    if (value === "High") return "Vysoká";
+    if (value === "Normal") return "Normální";
+    if (value === "Low") return "Nízká";
+    return value;
+  }
+
+  function getPaymentStatusDisplay(value: Order["paymentStatus"] | "Unpaid") {
+    if (value === "Paid") return "Zaplaceno";
+    if (value === "Unpaid") return "Nezaplaceno";
+    if (value === "Pending" || value === "Awaiting") return "Čeká na platbu";
+    return value;
+  }
+
+  function getOrderStatusDisplay(value: WorkspaceStatus) {
+    if (value === "new") return "Nová";
+    if (value === "ready_for_picking") return "Připraveno ke sběru";
+    if (value === "picking") return "Sběr";
+    if (value === "packed") return "Zabaleno";
+    if (value === "ready_to_ship") return "Připraveno k odeslání";
+    if (value === "shipped") return "Odesláno";
+    if (value === "cancelled") return "Zrušeno";
+    return value;
+  }
 
   const packingChecklistEntries = [
-    { key: "productsVerified" as const, label: locale === "cs" ? "Produkty overeny" : "Products verified" },
-    { key: "quantitiesVerified" as const, label: locale === "cs" ? "Mnozstvi overeno" : "Quantities verified" },
-    { key: "packageClosed" as const, label: locale === "cs" ? "Balik uzavren" : "Package closed" },
-    { key: "shippingLabelPrepared" as const, label: locale === "cs" ? "Stitek pripraven" : "Shipping label prepared" },
+    { key: "productsVerified" as const, label: "Produkty overeny" },
+    { key: "quantitiesVerified" as const, label: "Mnozstvi overeno" },
+    { key: "packageClosed" as const, label: "Balik uzavren" },
+    { key: "shippingLabelPrepared" as const, label: "Stitek pripraven" },
   ];
 
   const pickedItemsCount = useMemo(() => items.filter((item) => item.picked).length, [items]);
@@ -165,13 +180,13 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
 
   function handleStatusChange(next: WorkspaceStatus) {
     setWorkspaceStatus(next);
-    pushTimeline(`${locale === "cs" ? "Zmena stavu" : "Status changed"}: ${statusLabelMap[next]}`);
+    pushTimeline(`Zmena stavu: ${getOrderStatusDisplay(next)}`);
   }
 
   function handleStartPicking() {
     setMode("picking");
     setWorkspaceStatus("picking");
-    pushTimeline(locale === "cs" ? "Sber zahajen" : "Picking started");
+    pushTimeline(dictionary?.orders?.detail?.timeline?.picking ?? "Sber zahajen");
   }
 
   function handleOpenPacking() {
@@ -182,7 +197,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     setMode("packing");
     setWorkspaceStatus("packed");
     setItems((current) => current.map((item) => ({ ...item, packed: true })));
-    pushTimeline(locale === "cs" ? "Baleni zahajeno" : "Packing started");
+    pushTimeline(dictionary?.orders?.detail?.timeline?.packed ?? "Baleni zahajeno");
   }
 
   function handlePickItem(sku: string) {
@@ -200,15 +215,15 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
       })
     );
 
-    pushTimeline(`${locale === "cs" ? "Polozka vyskladnena" : "Item picked"}: ${sku}`);
+    pushTimeline(`Polozka vyskladnena: ${sku}`);
   }
 
   function handlePrintPickingList() {
-    pushTimeline(locale === "cs" ? "Tisk pick listu" : "Print Picking List");
+    pushTimeline("Tisk pick listu");
   }
 
   function handlePrintShippingLabel() {
-    pushTimeline(locale === "cs" ? "Tisk stitku" : "Print Shipping Label");
+    pushTimeline("Tisk prepravniho stitku");
   }
 
   function handleCompletePacking() {
@@ -217,7 +232,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     }
 
     setWorkspaceStatus("ready_to_ship");
-    pushTimeline(locale === "cs" ? "Baleni dokonceno" : "Packing completed");
+    pushTimeline(dictionary?.orders?.detail?.timeline?.done ?? "Baleni dokonceno");
     setMode("overview");
   }
 
@@ -225,10 +240,10 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.16),_transparent_28%),linear-gradient(135deg,_#020617,_#0f172a)] text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-8 sm:px-6 lg:px-8">
         <OrderHeader
-          eyebrow={dictionary?.orders?.detail?.eyebrow ?? "Order details"}
+          eyebrow={dictionary?.orders?.detail?.eyebrow ?? "Detail objednavky"}
           title={order.orderNumber}
-          subtitle={dictionary?.orders?.detail?.subtitle ?? "Operations and logistics overview."}
-          backLabel={dictionary?.orders?.detail?.back ?? "Back to orders"}
+          subtitle={dictionary?.orders?.detail?.subtitle ?? "Operacni a logisticky prehled objednavky"}
+          backLabel={dictionary?.orders?.detail?.back ?? "Zpet na objednavky"}
           locale={locale}
         />
 
@@ -238,26 +253,26 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-2xl font-semibold text-white">{order.orderNumber}</h2>
                 <span className={`rounded-full px-3 py-1 text-sm font-medium ${statusBadgeClasses(workspaceStatus)}`}>
-                  {statusLabelMap[workspaceStatus]}
+                  {getOrderStatusDisplay(workspaceStatus)}
                 </span>
                 <span className={`rounded-full px-3 py-1 text-sm font-medium ${priorityBadgeClasses(order.priority)}`}>
-                  {(dictionary?.orders?.detail?.priority ?? "Priority")}: {order.priority}
+                  {(dictionary?.orders?.detail?.priority ?? "Priorita")}: {getPriorityDisplay(order.priority)}
                 </span>
                 <span className={`rounded-full px-3 py-1 text-sm font-medium ${salesChannelBadgeClasses(order.salesChannel)}`}>
-                  {(dictionary?.orders?.detail?.salesChannel ?? "Sales channel")}: {order.salesChannel}
+                  {(dictionary?.orders?.detail?.salesChannel ?? "Prodejni kanal")}: {order.salesChannel}
                 </span>
               </div>
               <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-400">
-                <span>{(dictionary?.orders?.detail?.created ?? "Created")} {formatDateTime(order.createdAt)}</span>
-                <span>{(dictionary?.orders?.detail?.promiseDate ?? "Promise date")} {order.promiseDate}</span>
-                <span>{(dictionary?.orders?.detail?.paymentStatus ?? "Payment status")} {order.paymentStatus}</span>
-                <span>{(dictionary?.orders?.detail?.carrier ?? "Carrier")} {order.carrier}</span>
+                <span>{(dictionary?.orders?.detail?.created ?? "Vytvoreno")}: {formatDateTime(order.createdAt)}</span>
+                <span>{(dictionary?.orders?.detail?.promiseDate ?? "Slibeny termin")}: {order.promiseDate}</span>
+                <span>{(dictionary?.orders?.detail?.paymentStatus ?? "Stav platby")}: {getPaymentStatusDisplay(order.paymentStatus)}</span>
+                <span>{(dictionary?.orders?.detail?.carrier ?? "Dopravce")}: {order.carrier}</span>
               </div>
             </div>
 
             <div className="min-w-[260px] rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <label className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                {dictionary?.orders?.statusLabel ?? "Status"}
+                {dictionary?.orders?.statusLabel ?? "Stav"}
               </label>
               <select
                 value={workspaceStatus}
@@ -266,7 +281,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
               >
                 {statusOptions.map((status) => (
                   <option key={status} value={status}>
-                    {statusLabelMap[status]}
+                    {getOrderStatusDisplay(status)}
                   </option>
                 ))}
               </select>
@@ -279,7 +294,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-400">
-                  {locale === "cs" ? "Workspace sberu" : "Picking Workspace"}
+                  {dictionary?.orders?.statuses?.picking ?? "Sber"}
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold text-white">{order.orderNumber}</h3>
               </div>
@@ -288,13 +303,13 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                   onClick={() => setMode("overview")}
                   className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
-                  {locale === "cs" ? "Zpet na objednavku" : "Back to Order"}
+                  Zpet na objednavku
                 </button>
                 <button
                   onClick={handlePrintPickingList}
                   className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
-                  {locale === "cs" ? "Print Picking List" : "Print Picking List"}
+                  Tisk pick listu
                 </button>
               </div>
             </div>
@@ -302,7 +317,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
             <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <div className="flex items-center justify-between text-sm text-slate-300">
                 <span>{pickedItemsCount} / {totalItemsCount} ({pickingProgressPercent}%)</span>
-                <span className="text-slate-500">{locale === "cs" ? "Prubeh" : "Progress"}</span>
+                <span className="text-slate-500">Prubeh</span>
               </div>
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-800">
                 <div className="h-full bg-cyan-400 transition-all duration-300" style={{ width: `${pickingProgressPercent}%` }} />
@@ -314,11 +329,11 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                 <thead className="bg-slate-950/80 text-slate-400">
                   <tr>
                     <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.sku ?? "SKU"}</th>
-                    <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.name ?? "Name"}</th>
-                    <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.location ?? "Location"}</th>
-                    <th className="px-4 py-3">{locale === "cs" ? "Pozadovano" : "Required"}</th>
-                    <th className="px-4 py-3">{locale === "cs" ? "Vyskladneno" : "Picked"}</th>
-                    <th className="px-4 py-3">{locale === "cs" ? "Akce" : "Action"}</th>
+                    <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.name ?? "Nazev"}</th>
+                    <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.location ?? "Lokace"}</th>
+                    <th className="px-4 py-3">Pozadovane mnozstvi</th>
+                    <th className="px-4 py-3">Vyskladnene mnozstvi</th>
+                    <th className="px-4 py-3">Akce</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -332,14 +347,14 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                       <td className="px-4 py-3">
                         {item.picked ? (
                           <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
-                            {locale === "cs" ? "Hotovo" : "Done"}
+                            Hotovo
                           </span>
                         ) : (
                           <button
                             onClick={() => handlePickItem(item.sku)}
                             className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-300 hover:bg-cyan-500/20"
                           >
-                            {locale === "cs" ? "Oznacit jako vyskladneno" : "Mark as Picked"}
+                            Oznacit jako vyskladneno
                           </button>
                         )}
                       </td>
@@ -355,7 +370,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                 disabled={!isPickingComplete}
                 className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${isPickingComplete ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20" : "cursor-not-allowed border-slate-700 bg-slate-900/70 text-slate-500"}`}
               >
-                {locale === "cs" ? "Zahajit baleni" : "Start Packing"}
+                Zahajit baleni
               </button>
             </div>
           </section>
@@ -364,7 +379,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-400">
-                  {locale === "cs" ? "Workspace baleni" : "Packing Workspace"}
+                  {dictionary?.orders?.statuses?.packed ?? "Baleni"}
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold text-white">{order.orderNumber}</h3>
               </div>
@@ -373,13 +388,13 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                   onClick={() => setMode("picking")}
                   className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
-                  {locale === "cs" ? "Zpet na sber" : "Back to Picking"}
+                  Zpet na sber
                 </button>
                 <button
                   onClick={handlePrintShippingLabel}
                   className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
-                  {locale === "cs" ? "Print Shipping Label" : "Print Shipping Label"}
+                  Tisk prepravniho stitku
                 </button>
               </div>
             </div>
@@ -387,7 +402,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
             <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <div className="flex items-center justify-between text-sm text-slate-300">
                 <span>{completedPackingChecks} / {packingChecklistEntries.length} ({packingProgressPercent}%)</span>
-                <span className="text-slate-500">{locale === "cs" ? "Prubeh baleni" : "Packing progress"}</span>
+                <span className="text-slate-500">Prubeh baleni</span>
               </div>
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-800">
                 <div className="h-full bg-cyan-400 transition-all duration-300" style={{ width: `${packingProgressPercent}%` }} />
@@ -396,7 +411,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
 
             <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
-                {locale === "cs" ? "Checklist baleni" : "Packing checklist"}
+                Checklist baleni
               </h4>
               <div className="mt-4 space-y-3">
                 {packingChecklistEntries.map((entry) => (
@@ -423,25 +438,37 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                 disabled={!canCompletePacking}
                 className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${canCompletePacking ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20" : "cursor-not-allowed border-slate-700 bg-slate-900/70 text-slate-500"}`}
               >
-                {locale === "cs" ? "Dokoncit baleni" : "Complete Packing"}
+                Dokoncit baleni
               </button>
             </div>
           </section>
         ) : (
           <>
+            <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
+              <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.summary ?? "Souhrn objednavky"}</h3>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{dictionary?.orders?.table?.order ?? "Cislo objednavky"}</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{order.orderNumber}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{dictionary?.orders?.table?.items ?? "Polozky"}</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{order.items}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{dictionary?.orders?.table?.total ?? "Hodnota"}</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{order.total}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{dictionary?.orders?.detail?.promiseDate ?? "Slibeny termin"}</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{order.promiseDate}</p>
+                </div>
+              </div>
+            </section>
+
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
-                <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.summary ?? "Order summary"}</h3>
-                <div className="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
-                  <p><span className="text-slate-500">{dictionary?.orders?.table?.order ?? "Order"}:</span> {order.orderNumber}</p>
-                  <p><span className="text-slate-500">{dictionary?.orders?.table?.items ?? "Items"}:</span> {order.items}</p>
-                  <p><span className="text-slate-500">{dictionary?.orders?.table?.total ?? "Total"}:</span> {order.total}</p>
-                  <p><span className="text-slate-500">{dictionary?.orders?.detail?.promiseDate ?? "Promise date"}:</span> {order.promiseDate}</p>
-                </div>
-              </section>
-
-              <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
-                <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.customer ?? "Customer information"}</h3>
+                <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.customer ?? "Zakaznik"}</h3>
                 <div className="mt-4 space-y-2 text-sm text-slate-300">
                   <p className="font-semibold text-white">{order.customer}</p>
                   <p>{order.company}</p>
@@ -451,34 +478,33 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
               </section>
 
               <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
-                <h3 className="text-xl font-semibold text-white">
-                  {dictionary?.orders?.detail?.customerCard?.shipping ?? "Shipping address"}
-                </h3>
+                <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.customerCard?.shipping ?? "Dodaci adresa"}</h3>
                 <p className="mt-4 text-sm text-slate-300">{order.shippingAddress}</p>
               </section>
 
               <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
-                <h3 className="text-xl font-semibold text-white">
-                  {dictionary?.orders?.detail?.customerCard?.billing ?? "Billing address"}
-                </h3>
+                <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.customerCard?.billing ?? "Fakturacni adresa"}</h3>
                 <p className="mt-4 text-sm text-slate-300">{order.billingAddress}</p>
+              </section>
+
+              <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
+                <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.notesLabel ?? "Poznamky"}</h3>
+                <p className="mt-4 text-sm text-slate-300">{order.notes || "-"}</p>
               </section>
             </div>
 
             <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
-              <h3 className="text-xl font-semibold text-white">
-                {dictionary?.orders?.detail?.products?.title ?? "Products / warehouse items"}
-              </h3>
+              <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.products?.title ?? "Produkty a skladove polozky"}</h3>
               <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-800">
                 <table className="min-w-full text-left text-sm">
                   <thead className="bg-slate-950/80 text-slate-400">
                     <tr>
                       <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.sku ?? "SKU"}</th>
-                      <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.name ?? "Name"}</th>
-                      <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.location ?? "Location"}</th>
-                      <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.quantity ?? "Quantity"}</th>
-                      <th className="px-4 py-3">{locale === "cs" ? "Vyskladneno" : "Picked"}</th>
-                      <th className="px-4 py-3">{locale === "cs" ? "Zabaleno" : "Packed"}</th>
+                      <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.name ?? "Nazev"}</th>
+                      <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.location ?? "Lokace"}</th>
+                      <th className="px-4 py-3">{dictionary?.orders?.detail?.products?.quantity ?? "Mnozstvi"}</th>
+                      <th className="px-4 py-3">Vyskladneno</th>
+                      <th className="px-4 py-3">Zabaleno</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -488,8 +514,8 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                         <td className="px-4 py-3 text-slate-200">{item.name}</td>
                         <td className="px-4 py-3 text-slate-300">{item.location}</td>
                         <td className="px-4 py-3 text-slate-300">{item.requiredQuantity}</td>
-                        <td className="px-4 py-3 text-slate-300">{item.picked ? (locale === "cs" ? "Ano" : "Yes") : (locale === "cs" ? "Ne" : "No")}</td>
-                        <td className="px-4 py-3 text-slate-300">{item.packed ? (locale === "cs" ? "Ano" : "Yes") : (locale === "cs" ? "Ne" : "No")}</td>
+                        <td className="px-4 py-3 text-slate-300">{item.picked ? "Ano" : "Ne"}</td>
+                        <td className="px-4 py-3 text-slate-300">{item.packed ? "Ano" : "Ne"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -499,17 +525,17 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
               <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
-                <h3 className="text-xl font-semibold text-white">{locale === "cs" ? "Informace o zasilce" : "Shipment information"}</h3>
+                <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.fulfillment?.title ?? "Informace o zasilce"}</h3>
                 <div className="mt-4 space-y-2 text-sm text-slate-300">
-                  <p><span className="text-slate-500">{dictionary?.orders?.detail?.carrier ?? "Carrier"}:</span> {order.carrier}</p>
-                  <p><span className="text-slate-500">{dictionary?.orders?.detail?.fulfillment?.tracking ?? "Tracking"}:</span> {order.trackingNumber ?? "-"}</p>
-                  <p><span className="text-slate-500">{dictionary?.orders?.detail?.fulfillment?.slot ?? "Warehouse slot"}:</span> {order.warehouseSlot}</p>
-                  <p><span className="text-slate-500">{dictionary?.orders?.detail?.paymentStatus ?? "Payment status"}:</span> {order.paymentStatus}</p>
+                  <p><span className="text-slate-500">{dictionary?.orders?.detail?.carrier ?? "Dopravce"}:</span> {order.carrier}</p>
+                  <p><span className="text-slate-500">{dictionary?.orders?.detail?.fulfillment?.tracking ?? "Sledovani"}:</span> {order.trackingNumber ?? "-"}</p>
+                  <p><span className="text-slate-500">{dictionary?.orders?.detail?.fulfillment?.slot ?? "Skladova pozice"}:</span> {order.warehouseSlot}</p>
+                  <p><span className="text-slate-500">{dictionary?.orders?.detail?.paymentStatus ?? "Stav platby"}:</span> {getPaymentStatusDisplay(order.paymentStatus)}</p>
                 </div>
               </section>
 
               <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
-                <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.timeline?.title ?? "Timeline"}</h3>
+                <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.timeline?.title ?? "Casova osa objednavky"}</h3>
                 <div className="mt-4 space-y-3">
                   {timeline.map((entry) => (
                     <div key={entry.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
@@ -522,38 +548,38 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
             </div>
 
             <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
-              <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.warehouse?.title ?? "Warehouse actions"}</h3>
+              <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.warehouse?.title ?? "Skladove akce"}</h3>
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   onClick={handleStartPicking}
                   className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20"
                 >
-                  {locale === "cs" ? "Start Picking" : "Start Picking"}
+                  {dictionary?.orders?.detail?.warehouse?.startPicking ?? "Zahajit sber"}
                 </button>
                 <button
                   onClick={handleOpenPacking}
                   disabled={!isPickingComplete}
                   className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${isPickingComplete ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20" : "cursor-not-allowed border-slate-700 bg-slate-900/70 text-slate-500"}`}
                 >
-                  {locale === "cs" ? "Start Packing" : "Start Packing"}
+                  Zahajit baleni
                 </button>
                 <button
                   onClick={handlePrintPickingList}
                   className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
-                  {locale === "cs" ? "Print Picking List" : "Print Picking List"}
+                  Tisk pick listu
                 </button>
                 <button
                   onClick={handlePrintShippingLabel}
                   className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
-                  {locale === "cs" ? "Print Shipping Label" : "Print Shipping Label"}
+                  {dictionary?.orders?.detail?.printLabel ?? "Tisk prepravniho stitku"}
                 </button>
                 <Link
                   href={`/${locale}/orders`}
                   className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
-                  {dictionary?.orders?.detail?.back ?? "Back to orders"}
+                  {dictionary?.orders?.detail?.back ?? "Zpet na objednavky"}
                 </Link>
               </div>
             </section>

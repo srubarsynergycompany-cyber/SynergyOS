@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Dialog } from "@/components/ui/Dialog";
@@ -70,6 +70,10 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [formValues, setFormValues] = useState<ProductInputForm>(emptyForm);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [guidedCreate, setGuidedCreate] = useState(false);
+  const [formHighlighted, setFormHighlighted] = useState(false);
+  const formSectionRef = useRef<HTMLDivElement | null>(null);
+  const skuInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedProduct = useMemo(() => items.find((item) => item.id === selectedId) ?? null, [items, selectedId]);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -127,6 +131,65 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
     void loadProducts(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, category, activeFilter]);
+
+  useEffect(() => {
+    if (formMode !== "create" || !guidedCreate) {
+      return;
+    }
+
+    const formNode = formSectionRef.current;
+    if (!formNode) {
+      return;
+    }
+
+    const targetTop = window.scrollY + formNode.getBoundingClientRect().top - 100;
+    const clampedTargetTop = Math.max(0, targetTop);
+    window.scrollTo({ top: clampedTargetTop, behavior: "smooth" });
+    setFormHighlighted(true);
+
+    const focusSkuInput = () => {
+      const input = skuInputRef.current;
+      if (!input) {
+        return false;
+      }
+      input.focus({ preventScroll: true });
+      input.select();
+      return document.activeElement === input;
+    };
+
+    let rafId = 0;
+    const focusWhenScrollSettles = () => {
+      const remainingScroll = Math.abs(window.scrollY - clampedTargetTop);
+      if (remainingScroll <= 2) {
+        if (!focusSkuInput()) {
+          rafId = window.requestAnimationFrame(focusWhenScrollSettles);
+        }
+        return;
+      }
+
+      rafId = window.requestAnimationFrame(focusWhenScrollSettles);
+    };
+
+    rafId = window.requestAnimationFrame(focusWhenScrollSettles);
+
+    const highlightTimer = window.setTimeout(() => {
+      setFormHighlighted(false);
+    }, 1400);
+
+    setGuidedCreate(false);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [formMode, guidedCreate]);
+
+  function onCreateProductClick() {
+    setFormMode("create");
+    setSubmitError(null);
+    setFormValues({ ...emptyForm, customerId: customers[0]?.id ?? "" });
+    setGuidedCreate(true);
+  }
 
   function toFormValues(product: Product): ProductInputForm {
     return {
@@ -228,13 +291,7 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
             <p className="text-sm font-medium uppercase tracking-[0.32em] text-cyan-400">{copy.eyebrow}</p>
             <h2 className="mt-2 text-3xl font-semibold text-white">{copy.title}</h2>
           </div>
-          <Button
-            onClick={() => {
-              setFormMode("create");
-              setSubmitError(null);
-              setFormValues({ ...emptyForm, customerId: customers[0]?.id ?? "" });
-            }}
-          >
+          <Button onClick={onCreateProductClick}>
             {copy.createButton}
           </Button>
         </div>
@@ -420,11 +477,17 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
       ) : null}
 
       {formMode ? (
-        <Dialog title={formMode === "create" ? copy.form.createTitle : copy.form.editTitle}>
+        <div
+          ref={formSectionRef}
+          className={`rounded-3xl transition-all duration-500 ${
+            formHighlighted ? "ring-2 ring-cyan-400/70 ring-offset-2 ring-offset-slate-950" : ""
+          }`}
+        >
+          <Dialog title={formMode === "create" ? copy.form.createTitle : copy.form.editTitle}>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block text-sm text-slate-300">
               <span className="mb-2 block">{copy.form.sku}</span>
-              <input value={formValues.sku} onChange={(event) => setFormValues((state) => ({ ...state, sku: event.target.value }))} className="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-white outline-none focus:border-cyan-400" />
+              <input ref={skuInputRef} value={formValues.sku} onChange={(event) => setFormValues((state) => ({ ...state, sku: event.target.value }))} className="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-white outline-none focus:border-cyan-400" />
             </label>
             <label className="block text-sm text-slate-300">
               <span className="mb-2 block">{copy.form.eanBarcode}</span>
@@ -491,7 +554,8 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
             <Button onClick={() => void onSubmitForm()}>{copy.form.save}</Button>
             <Button variant="ghost" onClick={() => setFormMode(null)}>{copy.form.cancel}</Button>
           </div>
-        </Dialog>
+          </Dialog>
+        </div>
       ) : null}
     </div>
   );

@@ -1,8 +1,16 @@
-import OrdersModule from "@/components/OrdersModule";
-import { getDictionary } from "@/lib/i18n/dictionaries";
+import { Card } from '@/components/ui/Card';
+import { Table } from '@/components/ui/Table';
+import { orderService } from '@/services';
 
-export default function OrdersPage() {
-  const dictionary = getDictionary("en");
+export default async function OrdersPage() {
+  const orders = await orderService.list();
 
-  return <OrdersModule dictionary={dictionary} locale="en" />;
+  return (
+    <Card title="Orders" subtitle="Shared order workspace">
+      <Table
+        headers={['Order', 'Status', 'Priority', 'Amount']}
+        rows={orders.map((order) => [order.orderNumber, order.status, order.priority, `${order.currency} ${order.totalAmount}`])}
+      />
+    </Card>
+  );
 }

@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { OrderHeader } from "@/components/orders/OrderHeader";
+import type { Dictionary } from "@/lib/i18n/types";
 import type { Order } from "@/lib/orders/mockData";
 
 type OrderDetailViewProps = {
   initialOrder: Order;
   locale: string;
-  dictionary: any;
+  dictionary: Dictionary;
 };
 
 type WorkspaceStatus =
@@ -45,6 +46,17 @@ type PackingChecklist = {
   shippingLabelPrepared: boolean;
 };
 
+type ApiOrderDetail = {
+  id: string;
+  orderNumber?: string;
+  customerId?: string;
+  status?: string;
+  createdAt?: string;
+  priority?: string;
+  totalAmount?: number;
+  currency?: string;
+};
+
 function mapInitialStatus(status: Order["status"]): WorkspaceStatus {
   if (status === "picking") return "picking";
   if (status === "packed") return "packed";
@@ -72,8 +84,39 @@ function salesChannelBadgeClasses(channel: Order["salesChannel"]) {
     : "border border-indigo-500/40 bg-indigo-500/10 text-indigo-300";
 }
 
+function parseOrderStatus(status: string | undefined, fallback: Order["status"]): Order["status"] {
+  const normalized = String(status ?? "").toLowerCase();
+  if (normalized === "new" || normalized === "picking" || normalized === "packed" || normalized === "shipped" || normalized === "delivered") {
+    return normalized;
+  }
+  return fallback;
+}
+
+function parsePriority(priority: string | undefined, fallback: Order["priority"]): Order["priority"] {
+  if (priority === "High" || priority === "Normal" || priority === "Low") {
+    return priority;
+  }
+  return fallback;
+}
+
+function mergeOrderFromApi(base: Order, api: ApiOrderDetail): Order {
+  return {
+    ...base,
+    id: api.id || base.id,
+    orderNumber: api.orderNumber || base.orderNumber,
+    customer: api.customerId || base.customer,
+    company: api.customerId || base.company,
+    status: parseOrderStatus(api.status, base.status),
+    createdAt: api.createdAt || base.createdAt,
+    updatedAt: api.createdAt || base.updatedAt,
+    priority: parsePriority(api.priority, base.priority),
+    total: typeof api.totalAmount === "number" ? `${api.totalAmount.toFixed(2)} ${api.currency ?? "USD"}` : base.total,
+  };
+}
+
 export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetailViewProps) {
-  const [order] = useState(initialOrder);
+  const [order, setOrder] = useState(initialOrder);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("overview");
   const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>(() => mapInitialStatus(initialOrder.status));
   const [items, setItems] = useState<ItemState[]>(() => {
@@ -112,6 +155,37 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
       timestamp: order.updatedAt,
     },
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOrderDetail() {
+      try {
+        setLoadError(null);
+        const response = await fetch(`/api/orders/${encodeURIComponent(initialOrder.id)}`, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Failed to load order detail from API.");
+        }
+
+        const payload = (await response.json()) as ApiOrderDetail;
+        if (!cancelled) {
+          setOrder((current) => mergeOrderFromApi(current, payload));
+        }
+      } catch {
+        if (!cancelled) {
+          // Explicit fallback: preserve initial detail payload when API is unavailable.
+          setOrder(initialOrder);
+          setLoadError("Orders API detail is unavailable. Showing fallback data.");
+        }
+      }
+    }
+
+    void loadOrderDetail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialOrder]);
 
   const statusOptions: WorkspaceStatus[] = [
     "new",
@@ -248,6 +322,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
         />
 
         <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
+          {loadError ? <p className="mb-3 text-sm text-amber-300">{loadError}</p> : null}
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">

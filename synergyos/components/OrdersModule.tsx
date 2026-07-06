@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import LanguageSwitcher from "@/lib/i18n/LanguageSwitcher";
 import type { Locale } from "@/lib/i18n/types";
 import type { Dictionary } from "@/lib/i18n/types";
@@ -15,6 +15,63 @@ type OrdersModuleProps = {
 const PAGE_SIZE = 5;
 const statusOrder: OrderStatus[] = ["new", "picking", "packed", "shipped", "delivered"];
 
+type ApiOrderListItem = {
+  id: string;
+  orderNumber: string;
+  customerId?: string;
+  status?: string;
+  createdAt?: string;
+  priority?: string;
+  totalAmount?: number;
+  currency?: string;
+};
+
+function parseOrderStatus(status: string | undefined): OrderStatus {
+  const normalized = String(status ?? "").toLowerCase();
+  if (normalized === "new" || normalized === "picking" || normalized === "packed" || normalized === "shipped" || normalized === "delivered") {
+    return normalized;
+  }
+  return "new";
+}
+
+function parsePriority(priority: string | undefined): Order["priority"] {
+  if (priority === "High" || priority === "Normal" || priority === "Low") {
+    return priority;
+  }
+  return "Normal";
+}
+
+function mapApiOrderToViewModel(item: ApiOrderListItem): Order {
+  const nowIso = new Date().toISOString();
+  const customerLabel = item.customerId?.trim() ? item.customerId : "Unknown customer";
+
+  return {
+    id: item.id,
+    orderNumber: item.orderNumber,
+    customer: customerLabel,
+    company: customerLabel,
+    phone: "",
+    email: "",
+    shop: "SynergyOS",
+    status: parseOrderStatus(item.status),
+    carrier: "-",
+    createdAt: item.createdAt ?? nowIso,
+    updatedAt: item.createdAt ?? nowIso,
+    items: 0,
+    total: typeof item.totalAmount === "number" ? `${item.totalAmount.toFixed(2)} ${item.currency ?? "USD"}` : "$0.00",
+    address: "",
+    shippingAddress: "",
+    billingAddress: "",
+    priority: parsePriority(item.priority),
+    notes: "",
+    warehouseSlot: "TBD",
+    promiseDate: (item.createdAt ?? nowIso).split("T")[0],
+    salesChannel: "Shopify",
+    paymentStatus: "Pending",
+    products: [],
+  };
+}
+
 export default function OrdersModule({ dictionary, locale }: OrdersModuleProps) {
   const [orders, setOrders] = useState<Order[]>(mockOrders);
   const [search, setSearch] = useState("");
@@ -22,6 +79,7 @@ export default function OrdersModule({ dictionary, locale }: OrdersModuleProps) 
   const [page, setPage] = useState(1);
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
     customer: "",
     salesChannel: "Shopify" as Order["salesChannel"],
@@ -29,6 +87,40 @@ export default function OrdersModule({ dictionary, locale }: OrdersModuleProps) 
     priority: "Normal" as Order["priority"],
     notes: "",
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOrders() {
+      try {
+        setLoadError(null);
+        const response = await fetch("/api/orders", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Failed to load orders from API.");
+        }
+
+        const payload = (await response.json()) as { items?: ApiOrderListItem[] };
+        const apiItems = Array.isArray(payload.items) ? payload.items : [];
+        const mapped = apiItems.map(mapApiOrderToViewModel);
+
+        if (!cancelled) {
+          setOrders(mapped.length > 0 ? mapped : mockOrders);
+        }
+      } catch {
+        if (!cancelled) {
+          // Explicit fallback: keep module usable with local fixtures if API is unavailable.
+          setOrders(mockOrders);
+          setLoadError("Orders API is unavailable. Showing fallback data.");
+        }
+      }
+    }
+
+    void loadOrders();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredOrders = useMemo(() => {
     const term = search.toLowerCase();
@@ -214,6 +306,7 @@ export default function OrdersModule({ dictionary, locale }: OrdersModuleProps) 
       ) : null}
 
       <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40">
+        {loadError ? <p className="mb-3 text-sm text-amber-300">{loadError}</p> : null}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex-1">
             <label className="text-sm text-slate-400">{dictionary.orders.searchLabel}</label>

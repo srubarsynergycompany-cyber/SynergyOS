@@ -18,6 +18,16 @@ export type {
 export { createInMemoryKnowledgeBase } from "./knowledgeBase";
 
 export type {
+  KnowledgeDomain,
+  KnowledgeEngine,
+  KnowledgeSearchResult,
+  KnowledgeSourceRecord,
+  RegisterKnowledgeSourcesResult,
+  SafeAnswerContext,
+} from "./knowledgeEngine";
+export { createKnowledgeEngine, SUPPORTED_DOMAINS } from "./knowledgeEngine";
+
+export type {
   AIWorkspaceState,
   CreateWorkspaceOptions,
   ProjectStatusOverview,

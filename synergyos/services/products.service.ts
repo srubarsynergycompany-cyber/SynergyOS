@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/database/prisma';
-import { mockProducts } from '@/services/mockData';
+import { mockCustomers, mockProducts } from '@/services/mockData';
 import type { Product } from '@/types';
 
 type ProductListParams = {
@@ -16,6 +16,8 @@ type PaginatedProducts = {
   page: number;
   pageSize: number;
 };
+
+type ProductServiceErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'CONFLICT' | 'DATA_ACCESS';
 
 export type ProductInput = {
   sku: string;
@@ -34,7 +36,33 @@ export type ProductInput = {
   active: boolean;
 };
 
+export class ProductServiceError extends Error {
+  code: ProductServiceErrorCode;
+
+  constructor(message: string, code: ProductServiceErrorCode) {
+    super(message);
+    this.name = 'ProductServiceError';
+    this.code = code;
+  }
+}
+
+export function isProductServiceError(error: unknown): error is ProductServiceError {
+  return error instanceof ProductServiceError;
+}
+
 let mockProductsStore: Product[] = [...mockProducts];
+
+function shouldUseMockDataSource() {
+  return !prisma;
+}
+
+function getDbClient() {
+  if (!prisma) {
+    throw new ProductServiceError('Database client is not available.', 'DATA_ACCESS');
+  }
+
+  return prisma;
+}
 
 function toNumber(value: unknown) {
   return Number(value ?? 0);
@@ -115,11 +143,98 @@ function validateRequired(input: ProductInput) {
   }
 }
 
+function validateNumericFields(input: ProductInput) {
+  const decimalFields: Array<[keyof ProductInput, string]> = [
+    ['weight', 'Weight must be a non-negative number.'],
+    ['width', 'Width must be a non-negative number.'],
+    ['height', 'Height must be a non-negative number.'],
+    ['length', 'Length must be a non-negative number.'],
+  ];
+
+  for (const [key, message] of decimalFields) {
+    const value = input[key];
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      throw new ProductServiceError(message, 'VALIDATION');
+    }
+  }
+
+  const integerFields: Array<[keyof ProductInput, string]> = [
+    ['minimumStock', 'Minimum stock must be a non-negative integer.'],
+    ['currentStock', 'Current stock must be a non-negative integer.'],
+  ];
+
+  for (const [key, message] of integerFields) {
+    const value = input[key];
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+      throw new ProductServiceError(message, 'VALIDATION');
+    }
+  }
+
+  if (typeof input.active !== 'boolean') {
+    throw new ProductServiceError('Active flag must be boolean.', 'VALIDATION');
+  }
+}
+
+function normalizeInput(input: ProductInput): ProductInput {
+  return {
+    sku: input.sku.trim(),
+    eanBarcode: input.eanBarcode.trim(),
+    name: input.name.trim(),
+    description: input.description.trim(),
+    customerId: input.customerId.trim(),
+    category: input.category.trim(),
+    weight: Number(input.weight),
+    width: Number(input.width),
+    height: Number(input.height),
+    length: Number(input.length),
+    minimumStock: Number(input.minimumStock),
+    currentStock: Number(input.currentStock),
+    unit: input.unit.trim(),
+    active: input.active,
+  };
+}
+
+function validateInput(input: ProductInput) {
+  validateRequired(input);
+  validateNumericFields(input);
+}
+
+function toKnownServiceError(error: unknown): ProductServiceError {
+  if (isProductServiceError(error)) {
+    return error;
+  }
+
+  const candidate = error as { code?: string; message?: string };
+  if (candidate?.code === 'P2002') {
+    return new ProductServiceError('SKU or EAN barcode must be unique.', 'CONFLICT');
+  }
+  if (candidate?.code === 'P2003') {
+    return new ProductServiceError('Customer reference is invalid.', 'VALIDATION');
+  }
+  if (candidate?.code === 'P2025') {
+    return new ProductServiceError('Product not found.', 'NOT_FOUND');
+  }
+
+  return new ProductServiceError(candidate?.message ?? 'Unexpected product data error.', 'DATA_ACCESS');
+}
+
 function validateSkuUniqueInMock(sku: string, existingId?: string) {
   const exists = mockProductsStore.some((product) => product.sku.toLowerCase() === sku.toLowerCase() && product.id !== existingId);
   if (exists) {
     throw new Error('SKU must be unique.');
   }
+}
+
+function validateEanUniqueInMock(eanBarcode: string, existingId?: string) {
+  const exists = mockProductsStore.some((product) => product.eanBarcode.toLowerCase() === eanBarcode.toLowerCase() && product.id !== existingId);
+  if (exists) {
+    throw new ProductServiceError('EAN barcode must be unique.', 'CONFLICT');
+  }
+}
+
+function getMockCustomerName(customerId: string) {
+  const customer = mockCustomers.find((item) => item.id === customerId);
+  return customer?.name ?? 'Unknown customer';
 }
 
 function applyFilters(items: Product[], params: ProductListParams): Product[] {
@@ -138,8 +253,10 @@ function applyFilters(items: Product[], params: ProductListParams): Product[] {
 }
 
 function paginate(items: Product[], params: ProductListParams): PaginatedProducts {
-  const page = Math.max(1, params.page ?? 1);
+  const requestedPage = Math.max(1, params.page ?? 1);
   const pageSize = Math.max(1, params.pageSize ?? 10);
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const page = Math.min(requestedPage, totalPages);
   const start = (page - 1) * pageSize;
 
   return {
@@ -157,92 +274,125 @@ export const productsService = {
   },
 
   async listPaginated(params: ProductListParams = {}): Promise<PaginatedProducts> {
-    if (!prisma) {
+    if (shouldUseMockDataSource()) {
       return paginate(applyFilters(mockProductsStore, params), params);
     }
 
-    try {
-      const search = params.search?.trim();
-      const where = {
-        ...(params.category && params.category !== 'all' ? { category: params.category } : {}),
-        ...(params.active === undefined ? {} : { active: params.active }),
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' as const } },
-                { sku: { contains: search, mode: 'insensitive' as const } },
-                { eanBarcode: { contains: search, mode: 'insensitive' as const } },
-                { category: { contains: search, mode: 'insensitive' as const } },
-                { customer: { name: { contains: search, mode: 'insensitive' as const } } },
-              ],
-            }
-          : {}),
-      };
-      const page = Math.max(1, params.page ?? 1);
-      const pageSize = Math.max(1, params.pageSize ?? 10);
-      const skip = (page - 1) * pageSize;
+    const search = params.search?.trim();
+    const where = {
+      ...(params.category && params.category !== 'all' ? { category: params.category } : {}),
+      ...(params.active === undefined ? {} : { active: params.active }),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' as const } },
+              { sku: { contains: search, mode: 'insensitive' as const } },
+              { eanBarcode: { contains: search, mode: 'insensitive' as const } },
+              { category: { contains: search, mode: 'insensitive' as const } },
+              { customer: { name: { contains: search, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
+    };
+    const requestedPage = Math.max(1, params.page ?? 1);
+    const pageSize = Math.max(1, params.pageSize ?? 10);
+    const skip = (requestedPage - 1) * pageSize;
+    const db = getDbClient();
 
+    try {
       const [rows, total] = await Promise.all([
-        prisma.product.findMany({
+        db.product.findMany({
           where,
           include: { customer: { select: { name: true } } },
           orderBy: { name: 'asc' },
           skip,
           take: pageSize,
         }),
-        prisma.product.count({ where }),
+        db.product.count({ where }),
       ]);
 
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      const page = Math.min(requestedPage, totalPages);
+      if (page === requestedPage || total === 0) {
+        return {
+          items: rows.map(mapDbProduct),
+          total,
+          page,
+          pageSize,
+        };
+      }
+
+      const correctedRows = await db.product.findMany({
+        where,
+        include: { customer: { select: { name: true } } },
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+
       return {
-        items: rows.map(mapDbProduct),
+        items: correctedRows.map(mapDbProduct),
         total,
         page,
         pageSize,
       };
-    } catch {
-      return paginate(applyFilters(mockProductsStore, params), params);
+    } catch (error) {
+      throw toKnownServiceError(error);
     }
   },
 
   async getById(id: string): Promise<Product | null> {
-    if (!prisma) {
+    if (shouldUseMockDataSource()) {
       return mockProductsStore.find((product) => product.id === id) ?? null;
     }
 
+    const db = getDbClient();
+
     try {
-      const row = await prisma.product.findUnique({
+      const row = await db.product.findUnique({
         where: { id },
         include: { customer: { select: { name: true } } },
       });
       return row ? mapDbProduct(row) : null;
-    } catch {
-      return mockProductsStore.find((product) => product.id === id) ?? null;
+    } catch (error) {
+      throw toKnownServiceError(error);
     }
   },
 
   async create(input: ProductInput): Promise<Product> {
-    validateRequired(input);
-    validateSkuUniqueInMock(input.sku);
+    const normalizedInput = normalizeInput(input);
+    validateInput(normalizedInput);
 
-    if (prisma) {
+    if (!shouldUseMockDataSource()) {
+      const db = getDbClient();
+
       try {
-        const row = await prisma.product.create({
+        const customer = await db.customer.findUnique({
+          where: { id: normalizedInput.customerId },
+          select: { id: true, organizationId: true, name: true },
+        });
+
+        if (!customer) {
+          throw new ProductServiceError('Customer is required.', 'VALIDATION');
+        }
+
+        const row = await db.product.create({
           data: {
-            organizationId: 'ORG-DEMO',
-            sku: input.sku,
-            eanBarcode: input.eanBarcode,
-            name: input.name,
-            description: input.description,
-            customerId: input.customerId,
-            category: input.category,
-            weight: input.weight,
-            width: input.width,
-            height: input.height,
-            length: input.length,
-            minimumStock: input.minimumStock,
-            currentStock: input.currentStock,
-            unit: input.unit,
-            active: input.active,
+            organizationId: customer.organizationId,
+            sku: normalizedInput.sku,
+            eanBarcode: normalizedInput.eanBarcode,
+            name: normalizedInput.name,
+            description: normalizedInput.description,
+            customerId: normalizedInput.customerId,
+            category: normalizedInput.category,
+            weight: normalizedInput.weight,
+            width: normalizedInput.width,
+            height: normalizedInput.height,
+            length: normalizedInput.length,
+            minimumStock: normalizedInput.minimumStock,
+            currentStock: normalizedInput.currentStock,
+            unit: normalizedInput.unit,
+            active: normalizedInput.active,
             price: 0,
             currency: 'USD',
             warehousePositions: [],
@@ -254,30 +404,34 @@ export const productsService = {
           include: { customer: { select: { name: true } } },
         });
         return mapDbProduct(row);
-      } catch {
-        // Fallback to mock storage when database is not connected.
+      } catch (error) {
+        throw toKnownServiceError(error);
       }
     }
 
+    validateSkuUniqueInMock(normalizedInput.sku);
+    validateEanUniqueInMock(normalizedInput.eanBarcode);
+    const customerName = getMockCustomerName(normalizedInput.customerId);
+
     const created: Product = {
       id: `P-${Date.now()}`,
-      sku: input.sku,
-      eanBarcode: input.eanBarcode,
-      name: input.name,
-      description: input.description,
-      customerId: input.customerId,
-      customerName: 'Northstar Studio',
-      category: input.category,
-      weight: input.weight,
-      width: input.width,
-      height: input.height,
-      length: input.length,
-      minimumStock: input.minimumStock,
-      currentStock: input.currentStock,
-      unit: input.unit,
+      sku: normalizedInput.sku,
+      eanBarcode: normalizedInput.eanBarcode,
+      name: normalizedInput.name,
+      description: normalizedInput.description,
+      customerId: normalizedInput.customerId,
+      customerName,
+      category: normalizedInput.category,
+      weight: normalizedInput.weight,
+      width: normalizedInput.width,
+      height: normalizedInput.height,
+      length: normalizedInput.length,
+      minimumStock: normalizedInput.minimumStock,
+      currentStock: normalizedInput.currentStock,
+      unit: normalizedInput.unit,
       price: 0,
       currency: 'USD',
-      active: input.active,
+      active: normalizedInput.active,
       warehousePositions: [],
       batches: [],
       expirationDates: [],
@@ -291,72 +445,106 @@ export const productsService = {
   },
 
   async update(id: string, input: ProductInput): Promise<Product> {
-    validateRequired(input);
-    validateSkuUniqueInMock(input.sku, id);
+    const normalizedInput = normalizeInput(input);
+    validateInput(normalizedInput);
 
-    if (prisma) {
+    if (!shouldUseMockDataSource()) {
+      const db = getDbClient();
+
       try {
-        const row = await prisma.product.update({
+        const customer = await db.customer.findUnique({
+          where: { id: normalizedInput.customerId },
+          select: { id: true, organizationId: true },
+        });
+
+        if (!customer) {
+          throw new ProductServiceError('Customer is required.', 'VALIDATION');
+        }
+
+        const row = await db.product.update({
           where: { id },
           data: {
-            sku: input.sku,
-            eanBarcode: input.eanBarcode,
-            name: input.name,
-            description: input.description,
-            customerId: input.customerId,
-            category: input.category,
-            weight: input.weight,
-            width: input.width,
-            height: input.height,
-            length: input.length,
-            minimumStock: input.minimumStock,
-            currentStock: input.currentStock,
-            unit: input.unit,
-            active: input.active,
+            organizationId: customer.organizationId,
+            sku: normalizedInput.sku,
+            eanBarcode: normalizedInput.eanBarcode,
+            name: normalizedInput.name,
+            description: normalizedInput.description,
+            customerId: normalizedInput.customerId,
+            category: normalizedInput.category,
+            weight: normalizedInput.weight,
+            width: normalizedInput.width,
+            height: normalizedInput.height,
+            length: normalizedInput.length,
+            minimumStock: normalizedInput.minimumStock,
+            currentStock: normalizedInput.currentStock,
+            unit: normalizedInput.unit,
+            active: normalizedInput.active,
           },
           include: { customer: { select: { name: true } } },
         });
         return mapDbProduct(row);
-      } catch {
-        // Fallback below
+      } catch (error) {
+        throw toKnownServiceError(error);
       }
     }
 
+    validateSkuUniqueInMock(normalizedInput.sku, id);
+    validateEanUniqueInMock(normalizedInput.eanBarcode, id);
+
     const existing = mockProductsStore.find((product) => product.id === id);
     if (!existing) {
-      throw new Error('Product not found.');
+      throw new ProductServiceError('Product not found.', 'NOT_FOUND');
     }
 
     const updated: Product = {
       ...existing,
-      ...input,
+      ...normalizedInput,
       updatedAt: new Date().toISOString(),
-      customerName: existing.customerName,
+      customerName: getMockCustomerName(normalizedInput.customerId),
     };
     mockProductsStore = mockProductsStore.map((product) => (product.id === id ? updated : product));
     return updated;
   },
 
   async remove(id: string): Promise<void> {
-    if (prisma) {
+    if (!shouldUseMockDataSource()) {
+      const db = getDbClient();
+
       try {
-        await prisma.product.delete({ where: { id } });
+        await db.product.delete({ where: { id } });
         return;
-      } catch {
-        // Fallback below
+      } catch (error) {
+        throw toKnownServiceError(error);
       }
     }
 
     const next = mockProductsStore.filter((product) => product.id !== id);
     if (next.length === mockProductsStore.length) {
-      throw new Error('Product not found.');
+      throw new ProductServiceError('Product not found.', 'NOT_FOUND');
     }
     mockProductsStore = next;
   },
 
-  listCategories(): string[] {
-    const categories = new Set(mockProductsStore.map((product) => product.category).filter(Boolean));
-    return Array.from(categories).sort((a, b) => a.localeCompare(b));
+  async listCategories(): Promise<string[]> {
+    if (shouldUseMockDataSource()) {
+      const categories = new Set(mockProductsStore.map((product) => product.category).filter(Boolean));
+      return Array.from(categories).sort((a, b) => a.localeCompare(b));
+    }
+
+    const db = getDbClient();
+
+    try {
+      const rows = await db.product.findMany({
+        select: { category: true },
+        distinct: ['category'],
+      });
+      return rows
+        .map((row) => row.category)
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .sort((a, b) => a.localeCompare(b));
+    } catch (error) {
+      throw toKnownServiceError(error);
+    }
   },
 
   resetMockStoreForTests(): void {

@@ -1,11 +1,68 @@
 import { NextResponse } from 'next/server';
-import { productsService, type ProductInput } from '@/services/products.service';
+import {
+  isProductServiceError,
+  productsService,
+  type ProductInput,
+} from '@/services/products.service';
 
 function parseBoolean(value: string | null): boolean | undefined {
   if (value === null || value === undefined || value === '') {
     return undefined;
   }
-  return value === 'true';
+
+  if (value === 'true') {
+    return true;
+  }
+  if (value === 'false') {
+    return false;
+  }
+  return undefined;
+}
+
+function parsePositiveInteger(value: string | null, fallback: number) {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+function parseActiveInput(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') {
+      return true;
+    }
+    if (normalized === 'false') {
+      return false;
+    }
+  }
+
+  return Boolean(value);
+}
+
+function toErrorResponse(error: unknown, fallbackMessage: string) {
+  if (isProductServiceError(error)) {
+    const statusByCode = {
+      VALIDATION: 400,
+      NOT_FOUND: 404,
+      CONFLICT: 409,
+      DATA_ACCESS: 500,
+    } as const;
+
+    return NextResponse.json({ message: error.message }, { status: statusByCode[error.code] });
+  }
+
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  return NextResponse.json({ message }, { status: 500 });
 }
 
 function toProductInput(body: Record<string, unknown>): ProductInput {
@@ -23,30 +80,37 @@ function toProductInput(body: Record<string, unknown>): ProductInput {
     minimumStock: Number(body.minimumStock ?? 0),
     currentStock: Number(body.currentStock ?? 0),
     unit: String(body.unit ?? ''),
-    active: Boolean(body.active),
+    active: parseActiveInput(body.active),
   };
 }
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const search = url.searchParams.get('search') ?? undefined;
-  const category = url.searchParams.get('category') ?? undefined;
-  const active = parseBoolean(url.searchParams.get('active'));
-  const page = Number(url.searchParams.get('page') ?? 1);
-  const pageSize = Number(url.searchParams.get('pageSize') ?? 10);
+  try {
+    const url = new URL(request.url);
+    const search = url.searchParams.get('search') ?? undefined;
+    const category = url.searchParams.get('category') ?? undefined;
+    const active = parseBoolean(url.searchParams.get('active'));
+    const page = parsePositiveInteger(url.searchParams.get('page'), 1);
+    const pageSize = parsePositiveInteger(url.searchParams.get('pageSize'), 10);
 
-  const result = await productsService.listPaginated({
-    search,
-    category,
-    active,
-    page,
-    pageSize,
-  });
+    const [result, categories] = await Promise.all([
+      productsService.listPaginated({
+        search,
+        category,
+        active,
+        page,
+        pageSize,
+      }),
+      productsService.listCategories(),
+    ]);
 
-  return NextResponse.json({
-    ...result,
-    categories: productsService.listCategories(),
-  });
+    return NextResponse.json({
+      ...result,
+      categories,
+    });
+  } catch (error) {
+    return toErrorResponse(error, 'Failed to load products.');
+  }
 }
 
 export async function POST(request: Request) {
@@ -55,7 +119,6 @@ export async function POST(request: Request) {
     const product = await productsService.create(toProductInput(body));
     return NextResponse.json(product, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create product.';
-    return NextResponse.json({ message }, { status: 400 });
+    return toErrorResponse(error, 'Failed to create product.');
   }
 }

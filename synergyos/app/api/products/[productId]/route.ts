@@ -1,5 +1,42 @@
 import { NextResponse } from 'next/server';
-import { productsService, type ProductInput } from '@/services/products.service';
+import {
+  isProductServiceError,
+  productsService,
+  type ProductInput,
+} from '@/services/products.service';
+
+function parseActiveInput(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') {
+      return true;
+    }
+    if (normalized === 'false') {
+      return false;
+    }
+  }
+
+  return Boolean(value);
+}
+
+function toErrorResponse(error: unknown, fallbackMessage: string) {
+  if (isProductServiceError(error)) {
+    const statusByCode = {
+      VALIDATION: 400,
+      NOT_FOUND: 404,
+      CONFLICT: 409,
+      DATA_ACCESS: 500,
+    } as const;
+
+    return NextResponse.json({ message: error.message }, { status: statusByCode[error.code] });
+  }
+
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  return NextResponse.json({ message }, { status: 500 });
+}
 
 function toProductInput(body: Record<string, unknown>): ProductInput {
   return {
@@ -16,19 +53,23 @@ function toProductInput(body: Record<string, unknown>): ProductInput {
     minimumStock: Number(body.minimumStock ?? 0),
     currentStock: Number(body.currentStock ?? 0),
     unit: String(body.unit ?? ''),
-    active: Boolean(body.active),
+    active: parseActiveInput(body.active),
   };
 }
 
 export async function GET(_: Request, context: { params: Promise<{ productId: string }> }) {
-  const { productId } = await context.params;
-  const product = await productsService.getById(productId);
+  try {
+    const { productId } = await context.params;
+    const product = await productsService.getById(productId);
 
-  if (!product) {
-    return NextResponse.json({ message: 'Product not found.' }, { status: 404 });
+    if (!product) {
+      return NextResponse.json({ message: 'Product not found.' }, { status: 404 });
+    }
+
+    return NextResponse.json(product);
+  } catch (error) {
+    return toErrorResponse(error, 'Failed to load product.');
   }
-
-  return NextResponse.json(product);
 }
 
 export async function PUT(request: Request, context: { params: Promise<{ productId: string }> }) {
@@ -38,8 +79,7 @@ export async function PUT(request: Request, context: { params: Promise<{ product
     const product = await productsService.update(productId, toProductInput(body));
     return NextResponse.json(product);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to update product.';
-    return NextResponse.json({ message }, { status: 400 });
+    return toErrorResponse(error, 'Failed to update product.');
   }
 }
 
@@ -49,7 +89,6 @@ export async function DELETE(_: Request, context: { params: Promise<{ productId:
     await productsService.remove(productId);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to delete product.';
-    return NextResponse.json({ message }, { status: 400 });
+    return toErrorResponse(error, 'Failed to delete product.');
   }
 }

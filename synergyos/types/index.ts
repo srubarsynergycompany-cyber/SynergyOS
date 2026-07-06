@@ -1,3 +1,5 @@
+export * from './orders';
+
 export interface Order {
   id: string;
   orderNumber: string;

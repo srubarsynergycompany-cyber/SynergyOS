@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import type { Locale } from "./types";
 
 const localeLabels: Record<Locale, string> = {
@@ -17,14 +16,9 @@ type LanguageSwitcherProps = {
 export default function LanguageSwitcher({ locale, labels }: LanguageSwitcherProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [currentLocale, setCurrentLocale] = useState<Locale>(locale);
-
-  useEffect(() => {
-    setCurrentLocale(locale);
-  }, [locale]);
 
   const switchLocale = (nextLocale: Locale) => {
-    if (nextLocale === currentLocale) return;
+    if (nextLocale === locale) return;
 
     const nextPath = `/${nextLocale}${pathname.replace(/^\/[a-z]{2}(?=\/|$)/, "") || "/"}`;
     router.push(nextPath);
@@ -37,7 +31,7 @@ export default function LanguageSwitcher({ locale, labels }: LanguageSwitcherPro
           key={lang}
           onClick={() => switchLocale(lang)}
           className={`rounded-full px-3 py-1.5 transition ${
-            currentLocale === lang ? "bg-cyan-500/20 text-cyan-300" : "text-slate-400 hover:text-slate-200"
+            locale === lang ? "bg-cyan-500/20 text-cyan-300" : "text-slate-400 hover:text-slate-200"
           }`}
         >
           {labels[lang]}

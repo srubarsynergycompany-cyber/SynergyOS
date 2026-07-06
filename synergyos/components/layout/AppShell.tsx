@@ -103,7 +103,7 @@ export function AppShell({ children }: AppShellProps) {
                     </div>
                   ))}
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Operations workspace</h2>
+                <h2 className="mt-2 text-2xl font-semibold text-white">{dictionary.navigation.workspaceTitle}</h2>
               </div>
 
               <div className="flex items-center gap-3">

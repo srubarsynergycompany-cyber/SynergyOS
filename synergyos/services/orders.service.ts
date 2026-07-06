@@ -58,6 +58,61 @@ function toKnownOrderServiceError(error: unknown): OrderServiceError {
   return new OrderServiceError(candidate?.message ?? 'Unexpected order data error.', 'DATA_ACCESS');
 }
 
+function isDatabaseUnavailableError(error: unknown): boolean {
+  const candidate = error as { code?: string; message?: string };
+  const message = String(candidate?.message ?? '').toLowerCase();
+  const dbUnavailableCodes = new Set(['P1000', 'P1001', 'P1002', 'P1017']);
+
+  if (candidate?.code && dbUnavailableCodes.has(candidate.code)) {
+    return true;
+  }
+
+  return (
+    message.includes('can\'t reach database server')
+    || message.includes('connection refused')
+    || message.includes('econnrefused')
+    || message.includes('database client is not available')
+  );
+}
+
+function findMockOrderById(orderId: string): Order | null {
+  const normalizedOrderId = orderId.trim().toLowerCase();
+  const match = mockOrdersStore.find(
+    (order) => order.id.toLowerCase() === normalizedOrderId || order.orderNumber.toLowerCase() === normalizedOrderId,
+  );
+
+  return match ?? null;
+}
+
+function transitionMockOrder(orderId: string, nextStatus: OrderStatus): Order {
+  const normalizedOrderId = orderId.trim().toLowerCase();
+  let found = false;
+
+  mockOrdersStore = mockOrdersStore.map((item) => {
+    if (item.id.toLowerCase() !== normalizedOrderId && item.orderNumber.toLowerCase() !== normalizedOrderId) {
+      return item;
+    }
+
+    found = true;
+    return {
+      ...item,
+      status: nextStatus,
+      createdAt: item.createdAt,
+    };
+  });
+
+  if (!found) {
+    throw new OrderServiceError('Order not found.', 'NOT_FOUND');
+  }
+
+  const updated = findMockOrderById(orderId);
+  if (!updated) {
+    throw new OrderServiceError('Order not found.', 'NOT_FOUND');
+  }
+
+  return updated;
+}
+
 function mapDbOrder(row: {
   id: string;
   orderNumber: string;
@@ -94,18 +149,17 @@ export const ordersService = {
       });
       return rows.map(mapDbOrder);
     } catch (error) {
+      if (isDatabaseUnavailableError(error)) {
+        return [...mockOrdersStore];
+      }
+
       throw toKnownOrderServiceError(error);
     }
   },
 
   async getById(orderId: string): Promise<Order | null> {
-    const normalizedOrderId = orderId.trim().toLowerCase();
-
     if (shouldUseMockDataSource()) {
-      const match = mockOrdersStore.find(
-        (order) => order.id.toLowerCase() === normalizedOrderId || order.orderNumber.toLowerCase() === normalizedOrderId,
-      );
-      return match ?? null;
+      return findMockOrderById(orderId);
     }
 
     const db = getDbClient();
@@ -122,6 +176,10 @@ export const ordersService = {
 
       return row ? mapDbOrder(row) : null;
     } catch (error) {
+      if (isDatabaseUnavailableError(error)) {
+        return findMockOrderById(orderId);
+      }
+
       throw toKnownOrderServiceError(error);
     }
   },
@@ -150,35 +208,7 @@ export const ordersService = {
     }
 
     if (shouldUseMockDataSource()) {
-      const normalizedOrderId = orderId.trim().toLowerCase();
-      let found = false;
-
-      mockOrdersStore = mockOrdersStore.map((item) => {
-        if (item.id.toLowerCase() !== normalizedOrderId && item.orderNumber.toLowerCase() !== normalizedOrderId) {
-          return item;
-        }
-
-        found = true;
-        return {
-          ...item,
-          status: nextStatus,
-          createdAt: item.createdAt,
-        };
-      });
-
-      if (!found) {
-        throw new OrderServiceError('Order not found.', 'NOT_FOUND');
-      }
-
-      const updated = mockOrdersStore.find(
-        (item) => item.id.toLowerCase() === normalizedOrderId || item.orderNumber.toLowerCase() === normalizedOrderId,
-      );
-
-      if (!updated) {
-        throw new OrderServiceError('Order not found.', 'NOT_FOUND');
-      }
-
-      return updated;
+      return transitionMockOrder(orderId, nextStatus);
     }
 
     const db = getDbClient();
@@ -205,6 +235,10 @@ export const ordersService = {
 
       return mapDbOrder(row);
     } catch (error) {
+      if (isDatabaseUnavailableError(error)) {
+        return transitionMockOrder(orderId, nextStatus);
+      }
+
       throw toKnownOrderServiceError(error);
     }
   },

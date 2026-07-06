@@ -128,7 +128,9 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
   }
 
   useEffect(() => {
-    void loadProducts(1);
+    queueMicrotask(() => {
+      void loadProducts(1);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, category, activeFilter]);
 

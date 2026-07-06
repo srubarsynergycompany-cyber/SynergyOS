@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 import { ProductCard } from "@/components/warehouse/ProductCard";
 import { PickingProgress } from "@/components/warehouse/PickingProgress";
 import { ScanInput } from "@/components/warehouse/ScanInput";
@@ -25,6 +26,7 @@ export function PickingView({ locale, orderNumber, items }: PickingViewProps) {
   const [flashState, setFlashState] = useState<"success" | "error" | null>(null);
   const [completed, setCompleted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const dictionary = useMemo(() => getDictionary(locale === "cs" ? "cs" : "en"), [locale]);
 
   const currentItem = items[currentIndex];
   const pickedQuantity = pickedQuantities[currentIndex] ?? 0;
@@ -139,7 +141,7 @@ export function PickingView({ locale, orderNumber, items }: PickingViewProps) {
           <div className="space-y-6">
             <PickingProgress currentIndex={completed ? items.length : currentIndex + 1} totalItems={items.length} completed={completed} />
             <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
-              <h3 className="text-xl font-semibold text-white">{locale === "en" ? "Order summary" : "Přehled objednávky"}</h3>
+              <h3 className="text-xl font-semibold text-white">{dictionary.orders.detail.summary}</h3>
               <div className="mt-4 space-y-3 text-sm text-slate-400">
                 <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
                   <span>{locale === "en" ? "Order" : "Objednávka"}</span>

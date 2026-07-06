@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { OrderHeader } from "@/components/orders/OrderHeader";
 import type { Dictionary } from "@/lib/i18n/types";
 import type { Order } from "@/lib/orders/mockData";
+import { mapMockOrderToOrderDto, mapOrderDtoToUiOrder, type OrderDto } from "@/types";
 
 type OrderDetailViewProps = {
   initialOrder: Order;
@@ -46,17 +47,6 @@ type PackingChecklist = {
   shippingLabelPrepared: boolean;
 };
 
-type ApiOrderDetail = {
-  id: string;
-  orderNumber?: string;
-  customerId?: string;
-  status?: string;
-  createdAt?: string;
-  priority?: string;
-  totalAmount?: number;
-  currency?: string;
-};
-
 function mapInitialStatus(status: Order["status"]): WorkspaceStatus {
   if (status === "picking") return "picking";
   if (status === "packed") return "packed";
@@ -84,38 +74,42 @@ function salesChannelBadgeClasses(channel: Order["salesChannel"]) {
     : "border border-indigo-500/40 bg-indigo-500/10 text-indigo-300";
 }
 
-function parseOrderStatus(status: string | undefined, fallback: Order["status"]): Order["status"] {
-  const normalized = String(status ?? "").toLowerCase();
-  if (normalized === "new" || normalized === "picking" || normalized === "packed" || normalized === "shipped" || normalized === "delivered") {
-    return normalized;
-  }
-  return fallback;
+function formatApiTotal(order: OrderDto): string {
+  return `${order.totalAmount.toFixed(2)} ${order.currency}`;
 }
 
-function parsePriority(priority: string | undefined, fallback: Order["priority"]): Order["priority"] {
-  if (priority === "High" || priority === "Normal" || priority === "Low") {
-    return priority;
-  }
-  return fallback;
+function adaptMockOrderForDetail(order: Order): Order {
+  const mapped = mapOrderDtoToUiOrder(mapMockOrderToOrderDto(order));
+
+  return {
+    ...order,
+    id: mapped.id,
+    orderNumber: mapped.orderNumber,
+    status: mapped.status,
+    createdAt: mapped.createdAt,
+    priority: mapped.priority,
+  };
 }
 
-function mergeOrderFromApi(base: Order, api: ApiOrderDetail): Order {
+function mergeOrderFromDto(base: Order, dto: OrderDto): Order {
+  const mapped = mapOrderDtoToUiOrder(dto);
+
   return {
     ...base,
-    id: api.id || base.id,
-    orderNumber: api.orderNumber || base.orderNumber,
-    customer: api.customerId || base.customer,
-    company: api.customerId || base.company,
-    status: parseOrderStatus(api.status, base.status),
-    createdAt: api.createdAt || base.createdAt,
-    updatedAt: api.createdAt || base.updatedAt,
-    priority: parsePriority(api.priority, base.priority),
-    total: typeof api.totalAmount === "number" ? `${api.totalAmount.toFixed(2)} ${api.currency ?? "USD"}` : base.total,
+    id: mapped.id || base.id,
+    orderNumber: mapped.orderNumber || base.orderNumber,
+    customer: mapped.customer || base.customer,
+    company: mapped.company || base.company,
+    status: mapped.status,
+    createdAt: mapped.createdAt || base.createdAt,
+    updatedAt: mapped.updatedAt || base.updatedAt,
+    priority: mapped.priority,
+    total: formatApiTotal(dto),
   };
 }
 
 export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetailViewProps) {
-  const [order, setOrder] = useState(initialOrder);
+  const [order, setOrder] = useState(() => adaptMockOrderForDetail(initialOrder));
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("overview");
   const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>(() => mapInitialStatus(initialOrder.status));
@@ -167,14 +161,14 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
           throw new Error("Failed to load order detail from API.");
         }
 
-        const payload = (await response.json()) as ApiOrderDetail;
+        const payload = (await response.json()) as OrderDto;
         if (!cancelled) {
-          setOrder((current) => mergeOrderFromApi(current, payload));
+          setOrder((current) => mergeOrderFromDto(current, payload));
         }
       } catch {
         if (!cancelled) {
           // Explicit fallback: preserve initial detail payload when API is unavailable.
-          setOrder(initialOrder);
+          setOrder(adaptMockOrderForDetail(initialOrder));
           setLoadError("Orders API detail is unavailable. Showing fallback data.");
         }
       }
@@ -198,27 +192,28 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
   ];
 
   function getPriorityDisplay(value: Order["priority"]) {
-    if (value === "High") return "Vysoká";
-    if (value === "Normal") return "Normální";
-    if (value === "Low") return "Nízká";
+    if (value === "High") return dictionary?.orders?.detail?.valueLabels?.priority?.high ?? "High";
+    if (value === "Normal") return dictionary?.orders?.detail?.valueLabels?.priority?.normal ?? "Normal";
+    if (value === "Low") return dictionary?.orders?.detail?.valueLabels?.priority?.low ?? "Low";
     return value;
   }
 
   function getPaymentStatusDisplay(value: Order["paymentStatus"] | "Unpaid") {
-    if (value === "Paid") return "Zaplaceno";
-    if (value === "Unpaid") return "Nezaplaceno";
-    if (value === "Pending" || value === "Awaiting") return "Čeká na platbu";
+    if (value === "Paid") return dictionary?.orders?.detail?.valueLabels?.paymentStatus?.paid ?? "Paid";
+    if (value === "Unpaid") return dictionary?.orders?.detail?.valueLabels?.paymentStatus?.unpaid ?? "Unpaid";
+    if (value === "Pending") return dictionary?.orders?.detail?.valueLabels?.paymentStatus?.pending ?? "Pending";
+    if (value === "Awaiting") return dictionary?.orders?.detail?.valueLabels?.paymentStatus?.awaiting ?? "Awaiting";
     return value;
   }
 
   function getOrderStatusDisplay(value: WorkspaceStatus) {
-    if (value === "new") return "Nová";
-    if (value === "ready_for_picking") return "Připraveno ke sběru";
-    if (value === "picking") return "Sběr";
-    if (value === "packed") return "Zabaleno";
-    if (value === "ready_to_ship") return "Připraveno k odeslání";
-    if (value === "shipped") return "Odesláno";
-    if (value === "cancelled") return "Zrušeno";
+    if (value === "new") return dictionary?.orders?.detail?.valueLabels?.status?.new ?? dictionary?.orders?.statuses?.new ?? "New";
+    if (value === "ready_for_picking") return dictionary?.orders?.detail?.valueLabels?.status?.ready_for_picking ?? "Ready for picking";
+    if (value === "picking") return dictionary?.orders?.detail?.valueLabels?.status?.picking ?? dictionary?.orders?.statuses?.picking ?? "Picking";
+    if (value === "packed") return dictionary?.orders?.detail?.valueLabels?.status?.packed ?? dictionary?.orders?.statuses?.packed ?? "Packed";
+    if (value === "ready_to_ship") return dictionary?.orders?.detail?.valueLabels?.status?.ready_to_ship ?? "Ready to ship";
+    if (value === "shipped") return dictionary?.orders?.detail?.valueLabels?.status?.shipped ?? dictionary?.orders?.statuses?.shipped ?? "Shipped";
+    if (value === "cancelled") return dictionary?.orders?.detail?.valueLabels?.status?.cancelled ?? "Cancelled";
     return value;
   }
 

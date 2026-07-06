@@ -218,6 +218,23 @@ function toKnownServiceError(error: unknown): ProductServiceError {
   return new ProductServiceError(candidate?.message ?? 'Unexpected product data error.', 'DATA_ACCESS');
 }
 
+function isDatabaseUnavailableError(error: unknown): boolean {
+  const candidate = error as { code?: string; message?: string };
+  const message = String(candidate?.message ?? '').toLowerCase();
+  const dbUnavailableCodes = new Set(['P1000', 'P1001', 'P1002', 'P1017']);
+
+  if (candidate?.code && dbUnavailableCodes.has(candidate.code)) {
+    return true;
+  }
+
+  return (
+    message.includes('can\'t reach database server')
+    || message.includes('connection refused')
+    || message.includes('econnrefused')
+    || message.includes('database client is not available')
+  );
+}
+
 function validateSkuUniqueInMock(sku: string, existingId?: string) {
   const exists = mockProductsStore.some((product) => product.sku.toLowerCase() === sku.toLowerCase() && product.id !== existingId);
   if (exists) {
@@ -235,6 +252,82 @@ function validateEanUniqueInMock(eanBarcode: string, existingId?: string) {
 function getMockCustomerName(customerId: string) {
   const customer = mockCustomers.find((item) => item.id === customerId);
   return customer?.name ?? 'Unknown customer';
+}
+
+function listPaginatedFromMock(params: ProductListParams = {}): PaginatedProducts {
+  return paginate(applyFilters(mockProductsStore, params), params);
+}
+
+function getByIdFromMock(id: string): Product | null {
+  return mockProductsStore.find((product) => product.id === id) ?? null;
+}
+
+function createInMock(normalizedInput: ProductInput): Product {
+  validateSkuUniqueInMock(normalizedInput.sku);
+  validateEanUniqueInMock(normalizedInput.eanBarcode);
+  const customerName = getMockCustomerName(normalizedInput.customerId);
+
+  const created: Product = {
+    id: `P-${Date.now()}`,
+    sku: normalizedInput.sku,
+    eanBarcode: normalizedInput.eanBarcode,
+    name: normalizedInput.name,
+    description: normalizedInput.description,
+    customerId: normalizedInput.customerId,
+    customerName,
+    category: normalizedInput.category,
+    weight: normalizedInput.weight,
+    width: normalizedInput.width,
+    height: normalizedInput.height,
+    length: normalizedInput.length,
+    minimumStock: normalizedInput.minimumStock,
+    currentStock: normalizedInput.currentStock,
+    unit: normalizedInput.unit,
+    price: 0,
+    currency: 'USD',
+    active: normalizedInput.active,
+    warehousePositions: [],
+    batches: [],
+    expirationDates: [],
+    images: [],
+    attachments: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  mockProductsStore = [created, ...mockProductsStore];
+  return created;
+}
+
+function updateInMock(id: string, normalizedInput: ProductInput): Product {
+  validateSkuUniqueInMock(normalizedInput.sku, id);
+  validateEanUniqueInMock(normalizedInput.eanBarcode, id);
+
+  const existing = mockProductsStore.find((product) => product.id === id);
+  if (!existing) {
+    throw new ProductServiceError('Product not found.', 'NOT_FOUND');
+  }
+
+  const updated: Product = {
+    ...existing,
+    ...normalizedInput,
+    updatedAt: new Date().toISOString(),
+    customerName: getMockCustomerName(normalizedInput.customerId),
+  };
+  mockProductsStore = mockProductsStore.map((product) => (product.id === id ? updated : product));
+  return updated;
+}
+
+function removeInMock(id: string): void {
+  const next = mockProductsStore.filter((product) => product.id !== id);
+  if (next.length === mockProductsStore.length) {
+    throw new ProductServiceError('Product not found.', 'NOT_FOUND');
+  }
+  mockProductsStore = next;
+}
+
+function listCategoriesFromMock(): string[] {
+  const categories = new Set(mockProductsStore.map((product) => product.category).filter(Boolean));
+  return Array.from(categories).sort((a, b) => a.localeCompare(b));
 }
 
 function applyFilters(items: Product[], params: ProductListParams): Product[] {
@@ -275,7 +368,7 @@ export const productsService = {
 
   async listPaginated(params: ProductListParams = {}): Promise<PaginatedProducts> {
     if (shouldUseMockDataSource()) {
-      return paginate(applyFilters(mockProductsStore, params), params);
+      return listPaginatedFromMock(params);
     }
 
     const search = params.search?.trim();
@@ -337,13 +430,17 @@ export const productsService = {
         pageSize,
       };
     } catch (error) {
+      if (isDatabaseUnavailableError(error)) {
+        return listPaginatedFromMock(params);
+      }
+
       throw toKnownServiceError(error);
     }
   },
 
   async getById(id: string): Promise<Product | null> {
     if (shouldUseMockDataSource()) {
-      return mockProductsStore.find((product) => product.id === id) ?? null;
+      return getByIdFromMock(id);
     }
 
     const db = getDbClient();
@@ -355,6 +452,10 @@ export const productsService = {
       });
       return row ? mapDbProduct(row) : null;
     } catch (error) {
+      if (isDatabaseUnavailableError(error)) {
+        return getByIdFromMock(id);
+      }
+
       throw toKnownServiceError(error);
     }
   },
@@ -405,43 +506,15 @@ export const productsService = {
         });
         return mapDbProduct(row);
       } catch (error) {
+        if (isDatabaseUnavailableError(error)) {
+          return createInMock(normalizedInput);
+        }
+
         throw toKnownServiceError(error);
       }
     }
 
-    validateSkuUniqueInMock(normalizedInput.sku);
-    validateEanUniqueInMock(normalizedInput.eanBarcode);
-    const customerName = getMockCustomerName(normalizedInput.customerId);
-
-    const created: Product = {
-      id: `P-${Date.now()}`,
-      sku: normalizedInput.sku,
-      eanBarcode: normalizedInput.eanBarcode,
-      name: normalizedInput.name,
-      description: normalizedInput.description,
-      customerId: normalizedInput.customerId,
-      customerName,
-      category: normalizedInput.category,
-      weight: normalizedInput.weight,
-      width: normalizedInput.width,
-      height: normalizedInput.height,
-      length: normalizedInput.length,
-      minimumStock: normalizedInput.minimumStock,
-      currentStock: normalizedInput.currentStock,
-      unit: normalizedInput.unit,
-      price: 0,
-      currency: 'USD',
-      active: normalizedInput.active,
-      warehousePositions: [],
-      batches: [],
-      expirationDates: [],
-      images: [],
-      attachments: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    mockProductsStore = [created, ...mockProductsStore];
-    return created;
+    return createInMock(normalizedInput);
   },
 
   async update(id: string, input: ProductInput): Promise<Product> {
@@ -484,26 +557,15 @@ export const productsService = {
         });
         return mapDbProduct(row);
       } catch (error) {
+        if (isDatabaseUnavailableError(error)) {
+          return updateInMock(id, normalizedInput);
+        }
+
         throw toKnownServiceError(error);
       }
     }
 
-    validateSkuUniqueInMock(normalizedInput.sku, id);
-    validateEanUniqueInMock(normalizedInput.eanBarcode, id);
-
-    const existing = mockProductsStore.find((product) => product.id === id);
-    if (!existing) {
-      throw new ProductServiceError('Product not found.', 'NOT_FOUND');
-    }
-
-    const updated: Product = {
-      ...existing,
-      ...normalizedInput,
-      updatedAt: new Date().toISOString(),
-      customerName: getMockCustomerName(normalizedInput.customerId),
-    };
-    mockProductsStore = mockProductsStore.map((product) => (product.id === id ? updated : product));
-    return updated;
+    return updateInMock(id, normalizedInput);
   },
 
   async remove(id: string): Promise<void> {
@@ -514,21 +576,21 @@ export const productsService = {
         await db.product.delete({ where: { id } });
         return;
       } catch (error) {
+        if (isDatabaseUnavailableError(error)) {
+          removeInMock(id);
+          return;
+        }
+
         throw toKnownServiceError(error);
       }
     }
 
-    const next = mockProductsStore.filter((product) => product.id !== id);
-    if (next.length === mockProductsStore.length) {
-      throw new ProductServiceError('Product not found.', 'NOT_FOUND');
-    }
-    mockProductsStore = next;
+    removeInMock(id);
   },
 
   async listCategories(): Promise<string[]> {
     if (shouldUseMockDataSource()) {
-      const categories = new Set(mockProductsStore.map((product) => product.category).filter(Boolean));
-      return Array.from(categories).sort((a, b) => a.localeCompare(b));
+      return listCategoriesFromMock();
     }
 
     const db = getDbClient();
@@ -543,6 +605,10 @@ export const productsService = {
         .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
         .sort((a, b) => a.localeCompare(b));
     } catch (error) {
+      if (isDatabaseUnavailableError(error)) {
+        return listCategoriesFromMock();
+      }
+
       throw toKnownServiceError(error);
     }
   },

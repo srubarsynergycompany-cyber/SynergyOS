@@ -1,57 +1,21 @@
+import type { Order as UiOrder } from '@/lib/orders/mockData';
+
 export type OrderDtoStatus = 'new' | 'picking' | 'packed' | 'shipped' | 'delivered';
 
 export type OrderDtoPriority = 'High' | 'Normal' | 'Low';
 
-export type OrderDtoSalesChannel = 'Shopify' | 'Shoptet';
-
-export type OrderDtoPaymentStatus = 'Paid' | 'Pending' | 'Awaiting';
-
-export interface OrderDtoMoney {
-  amount: number;
-  currency: string;
-  formatted?: string;
-}
-
-export interface OrderDtoCustomer {
-  id?: string;
-  name?: string;
-  company?: string;
-  email?: string;
-  phone?: string;
-}
-
-export interface OrderDtoProduct {
-  sku: string;
-  name: string;
-  quantity: number;
-  location?: string;
-  inStock?: boolean;
-}
-
-export interface OrderDto {
+export type OrderDto = {
   id: string;
   orderNumber: string;
+  customerId: string;
   status: OrderDtoStatus;
-  priority: OrderDtoPriority;
   createdAt: string;
-  updatedAt?: string;
-  customer: OrderDtoCustomer;
-  totals: OrderDtoMoney;
-  itemCount?: number;
-  carrier?: string;
-  promiseDate?: string;
-  salesChannel?: OrderDtoSalesChannel;
-  paymentStatus?: OrderDtoPaymentStatus;
-  trackingNumber?: string;
-  notes?: string;
-  warehouseSlot?: string;
-  address?: string;
-  shippingAddress?: string;
-  billingAddress?: string;
-  products: OrderDtoProduct[];
-}
+  priority: OrderDtoPriority;
+  totalAmount: number;
+  currency: string;
+};
 
-export interface LegacyServiceOrder {
+export type ServiceOrderLike = {
   id: string;
   orderNumber: string;
   customerId: string;
@@ -60,46 +24,7 @@ export interface LegacyServiceOrder {
   priority: string;
   totalAmount: number;
   currency: string;
-}
-
-export interface LegacyMockOrderProduct {
-  sku: string;
-  name: string;
-  quantity: number;
-  location: string;
-  inStock: boolean;
-}
-
-export interface LegacyMockOrder {
-  id: string;
-  orderNumber: string;
-  customer: string;
-  company: string;
-  phone: string;
-  email: string;
-  shop: string;
-  status: OrderDtoStatus;
-  carrier: string;
-  createdAt: string;
-  updatedAt: string;
-  items: number;
-  total: string;
-  address: string;
-  shippingAddress: string;
-  billingAddress: string;
-  priority: OrderDtoPriority;
-  trackingNumber?: string;
-  notes: string;
-  warehouseSlot: string;
-  promiseDate: string;
-  salesChannel: OrderDtoSalesChannel;
-  paymentStatus: OrderDtoPaymentStatus;
-  pickerName?: string;
-  pickedAt?: string;
-  packedAt?: string;
-  shippedAt?: string;
-  products: LegacyMockOrderProduct[];
-}
+};
 
 function normalizeStatus(status: string): OrderDtoStatus {
   const normalized = status.trim().toLowerCase();
@@ -119,7 +44,7 @@ function normalizePriority(priority: string): OrderDtoPriority {
   return 'Normal';
 }
 
-function parseLegacyMoney(value: string): OrderDtoMoney {
+function parseUiMoney(value: string): { amount: number; currency: string } {
   const trimmed = value.trim();
   const match = trimmed.match(/^([^\d-]*)\s*(-?\d+(?:[.,]\d+)?)\s*([A-Za-z]{3})?$/);
 
@@ -127,7 +52,6 @@ function parseLegacyMoney(value: string): OrderDtoMoney {
     return {
       amount: 0,
       currency: 'USD',
-      formatted: trimmed,
     };
   }
 
@@ -138,60 +62,77 @@ function parseLegacyMoney(value: string): OrderDtoMoney {
   return {
     amount: Number.isFinite(amount) ? amount : 0,
     currency,
-    formatted: trimmed,
   };
 }
 
-export function mapServiceOrderToOrderDto(order: LegacyServiceOrder): OrderDto {
+function formatUiMoney(totalAmount: number, currency: string): string {
+  if (!Number.isFinite(totalAmount)) {
+    return '$0.00';
+  }
+
+  if (currency === 'USD') {
+    return `$${totalAmount.toFixed(2)}`;
+  }
+
+  return `${totalAmount.toFixed(2)} ${currency}`;
+}
+
+export function mapServiceOrderToOrderDto(order: ServiceOrderLike): OrderDto {
   return {
     id: order.id,
     orderNumber: order.orderNumber,
+    customerId: order.customerId,
     status: normalizeStatus(order.status),
     priority: normalizePriority(order.priority),
     createdAt: order.createdAt,
-    customer: {
-      id: order.customerId,
-    },
-    totals: {
-      amount: order.totalAmount,
-      currency: order.currency,
-    },
+    totalAmount: order.totalAmount,
+    currency: order.currency,
+  };
+}
+
+export function mapOrderDtoToUiOrder(order: OrderDto): UiOrder {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    customer: order.customerId,
+    company: order.customerId,
+    phone: '',
+    email: '',
+    shop: 'SynergyOS',
+    status: order.status,
+    carrier: '-',
+    createdAt: order.createdAt,
+    updatedAt: order.createdAt,
+    items: 0,
+    total: formatUiMoney(order.totalAmount, order.currency),
+    address: '',
+    shippingAddress: '',
+    billingAddress: '',
+    priority: order.priority,
+    notes: '',
+    warehouseSlot: 'TBD',
+    promiseDate: order.createdAt.split('T')[0] ?? order.createdAt,
+    salesChannel: 'Shopify',
+    paymentStatus: 'Pending',
     products: [],
   };
 }
 
-export function mapMockOrderToOrderDto(order: LegacyMockOrder): OrderDto {
+export function mapUiOrderToOrderDto(order: UiOrder, customerId = order.customer): OrderDto {
+  const totals = parseUiMoney(order.total);
+
   return {
     id: order.id,
     orderNumber: order.orderNumber,
+    customerId,
     status: order.status,
-    priority: order.priority,
     createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    customer: {
-      name: order.customer,
-      company: order.company,
-      email: order.email,
-      phone: order.phone,
-    },
-    totals: parseLegacyMoney(order.total),
-    itemCount: order.items,
-    carrier: order.carrier,
-    promiseDate: order.promiseDate,
-    salesChannel: order.salesChannel,
-    paymentStatus: order.paymentStatus,
-    trackingNumber: order.trackingNumber,
-    notes: order.notes,
-    warehouseSlot: order.warehouseSlot,
-    address: order.address,
-    shippingAddress: order.shippingAddress,
-    billingAddress: order.billingAddress,
-    products: order.products.map((product) => ({
-      sku: product.sku,
-      name: product.name,
-      quantity: product.quantity,
-      location: product.location,
-      inStock: product.inStock,
-    })),
+    priority: order.priority,
+    totalAmount: totals.amount,
+    currency: totals.currency,
   };
+}
+
+export function mapMockOrderToOrderDto(order: UiOrder, customerId = order.customer): OrderDto {
+  return mapUiOrderToOrderDto(order, customerId);
 }

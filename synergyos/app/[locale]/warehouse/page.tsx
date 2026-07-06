@@ -9,7 +9,7 @@ export function generateStaticParams() {
 export default async function LocaleWarehousePage({ params }: LocalePageProps) {
   const locale = await getLocaleFromParams(params);
   const dictionary = getDictionary(locale);
-  return <WarehouseDashboardView copy={dictionary.modules.warehouse} />;
+  return <WarehouseDashboardView copy={dictionary.modules.warehouse} locale={locale} />;
 }
 
 export const dynamicParams = false;

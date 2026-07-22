@@ -121,7 +121,21 @@ export async function PUT(request: Request, context: { params: Promise<{ product
 export async function DELETE(_: Request, context: { params: Promise<{ productId: string }> }) {
   try {
     const { productId } = await context.params;
-    await productsService.remove(productId);
+    const { data, error } = await supabaseServer
+      .from('products')
+      .delete()
+      .eq('id', productId)
+      .select('id')
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!data) {
+      return NextResponse.json({ message: 'Product not found.' }, { status: 404 });
+    }
+
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return toErrorResponse(error, 'Failed to delete product.');

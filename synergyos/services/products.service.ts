@@ -81,7 +81,7 @@ export function isProductServiceError(error: unknown): error is ProductServiceEr
 
 function normalizeInput(input: ProductInput): ProductInput {
   return {
-    sku: input.sku.trim(),
+    sku: input.sku.trim().toUpperCase(),
     eanBarcode: input.eanBarcode.trim(),
     name: input.name.trim(),
     description: input.description.trim(),

@@ -55,6 +55,12 @@ const emptyForm: ProductInputForm = {
   active: true,
 };
 
+async function getApiErrorMessage(response: Response, fallback: string) {
+  const body = (await response.json().catch(() => null)) as { message?: unknown; error?: unknown } | null;
+  const message = body?.message ?? body?.error;
+  return typeof message === "string" && message.trim() ? message : fallback;
+}
+
 export default function ProductsModule({ dictionary, locale, customers }: ProductsModuleProps) {
   const copy = dictionary.modules.productsModule;
   const [items, setItems] = useState<Product[]>([]);
@@ -70,6 +76,8 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [formValues, setFormValues] = useState<ProductInputForm>(emptyForm);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [pendingMutation, setPendingMutation] = useState<"save" | string | null>(null);
   const [guidedCreate, setGuidedCreate] = useState(false);
   const [formHighlighted, setFormHighlighted] = useState(false);
   const formSectionRef = useRef<HTMLDivElement | null>(null);
@@ -135,7 +143,7 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
   }, [search, category, activeFilter]);
 
   useEffect(() => {
-    if (formMode !== "create" || !guidedCreate) {
+    if (!formMode || !guidedCreate) {
       return;
     }
 
@@ -144,9 +152,9 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
       return;
     }
 
-    const targetTop = window.scrollY + formNode.getBoundingClientRect().top - 100;
+    const targetTop = window.scrollY + formNode.getBoundingClientRect().top;
     const clampedTargetTop = Math.max(0, targetTop);
-    window.scrollTo({ top: clampedTargetTop, behavior: "smooth" });
+    formNode.scrollIntoView({ behavior: "smooth", block: "start" });
     setFormHighlighted(true);
 
     const focusSkuInput = () => {
@@ -243,6 +251,10 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
   }
 
   async function onSubmitForm() {
+    if (pendingMutation) {
+      return;
+    }
+
     const validationError = validateForm(formValues);
     if (validationError) {
       setSubmitError(validationError);
@@ -250,39 +262,64 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
     }
 
     setSubmitError(null);
+    setMutationError(null);
     const payload = toPayload(formValues);
     const url = formMode === "edit" && selectedProduct ? `/api/products/${selectedProduct.id}` : "/api/products";
     const method = formMode === "edit" ? "PUT" : "POST";
 
-    const response = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      setPendingMutation("save");
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (!response.ok) {
-      const errorBody = (await response.json().catch(() => ({ message: "Failed to save product." }))) as { message?: string };
-      setSubmitError(errorBody.message ?? "Failed to save product.");
-      return;
+      if (!response.ok) {
+        setSubmitError(await getApiErrorMessage(response, "Produkt se nepodařilo uložit."));
+        return;
+      }
+
+      setFormMode(null);
+      setFormValues(emptyForm);
+      await loadProducts(page);
+    } catch {
+      setSubmitError("Produkt se nepodařilo uložit kvůli chybě sítě.");
+    } finally {
+      setPendingMutation(null);
     }
-
-    setFormMode(null);
-    setFormValues(emptyForm);
-    await loadProducts(page);
   }
 
-  async function onDelete(productId: string) {
-    const response = await fetch(`/api/products/${productId}`, { method: "DELETE" });
-    if (!response.ok) {
-      setSubmitError("Failed to delete product.");
+  async function onDelete(product: Product) {
+    if (pendingMutation) {
       return;
     }
 
-    if (selectedId === productId) {
-      setSelectedId(null);
+    const confirmed = window.confirm(`Opravdu chcete smazat produkt ${product.name} (${product.sku})?`);
+    if (!confirmed) {
+      return;
     }
 
-    await loadProducts(page);
+    try {
+      setMutationError(null);
+      setPendingMutation(product.id);
+
+      const response = await fetch(`/api/products/${product.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        setMutationError(await getApiErrorMessage(response, "Produkt se nepodařilo smazat."));
+        return;
+      }
+
+      if (selectedId === product.id) {
+        setSelectedId(null);
+      }
+
+      await loadProducts(page);
+    } catch {
+      setMutationError("Produkt se nepodařilo smazat kvůli chybě sítě.");
+    } finally {
+      setPendingMutation(null);
+    }
   }
 
   return (
@@ -340,6 +377,7 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
         </div>
 
         {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
+        {mutationError ? <p className="mt-4 text-sm text-rose-300">{mutationError}</p> : null}
 
         {items.length === 0 && !loading ? (
           <div className="mt-6">
@@ -390,6 +428,7 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
                               setFormMode("edit");
                               setSubmitError(null);
                               setFormValues(toFormValues(product));
+                              setGuidedCreate(true);
                             }}
                           >
                             {copy.table.edit}
@@ -397,11 +436,12 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
                           <Button
                             size="sm"
                             variant="ghost"
+                            disabled={pendingMutation !== null}
                             onClick={() => {
-                              void onDelete(product.id);
+                              void onDelete(product);
                             }}
                           >
-                            {copy.deleteButton}
+                            {pendingMutation === product.id ? "Mažu…" : copy.deleteButton}
                           </Button>
                         </div>
                       </td>
@@ -553,8 +593,10 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
           {submitError ? <p className="mt-4 text-sm text-rose-300">{submitError}</p> : null}
 
           <div className="mt-6 flex gap-3">
-            <Button onClick={() => void onSubmitForm()}>{copy.form.save}</Button>
-            <Button variant="ghost" onClick={() => setFormMode(null)}>{copy.form.cancel}</Button>
+            <Button disabled={pendingMutation !== null} onClick={() => void onSubmitForm()}>
+              {pendingMutation === "save" ? "Ukládám…" : copy.form.save}
+            </Button>
+            <Button disabled={pendingMutation === "save"} variant="ghost" onClick={() => setFormMode(null)}>{copy.form.cancel}</Button>
           </div>
           </Dialog>
         </div>

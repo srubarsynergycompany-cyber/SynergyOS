@@ -48,6 +48,8 @@ const ORDER_STATUSES: readonly OrderStatus[] = ['new', 'picking', 'packed', 'shi
 const ORDER_PRIORITIES: readonly OrderPriority[] = ['High', 'Normal', 'Low'];
 const PAYMENT_STATUSES: readonly PaymentStatus[] = ['Paid', 'Pending', 'Awaiting'];
 const SALES_CHANNELS: readonly SalesChannel[] = ['Shopify', 'Shoptet'];
+const ORDER_SELECT =
+  'id, external_id, client_id, status, carrier, priority, total_items, customer_name, customer_email, customer_phone, customer_company, total_amount, currency, payment_status, sales_channel, tracking_number, shipping_address, billing_address, notes, warehouse_slot, promise_date, shipped_at, created_at, updated_at';
 
 export class OrderServiceError extends Error {
   code: OrderServiceErrorCode;
@@ -214,34 +216,7 @@ export const ordersService = {
     try {
       const { data, error } = await getSupabaseServer()
         .from('orders')
-        .select(
-          [
-            'id',
-            'external_id',
-            'client_id',
-            'status',
-            'carrier',
-            'priority',
-            'total_items',
-            'customer_name',
-            'customer_email',
-            'customer_phone',
-            'customer_company',
-            'total_amount',
-            'currency',
-            'payment_status',
-            'sales_channel',
-            'tracking_number',
-            'shipping_address',
-            'billing_address',
-            'notes',
-            'warehouse_slot',
-            'promise_date',
-            'shipped_at',
-            'created_at',
-            'updated_at',
-          ].join(', '),
-        )
+        .select(ORDER_SELECT)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -265,34 +240,7 @@ export const ordersService = {
     try {
       let query = getSupabaseServer()
         .from('orders')
-        .select(
-          [
-            'id',
-            'external_id',
-            'client_id',
-            'status',
-            'carrier',
-            'priority',
-            'total_items',
-            'customer_name',
-            'customer_email',
-            'customer_phone',
-            'customer_company',
-            'total_amount',
-            'currency',
-            'payment_status',
-            'sales_channel',
-            'tracking_number',
-            'shipping_address',
-            'billing_address',
-            'notes',
-            'warehouse_slot',
-            'promise_date',
-            'shipped_at',
-            'created_at',
-            'updated_at',
-          ].join(', '),
-        );
+        .select(ORDER_SELECT);
 
       query = isUuid(normalizedOrderId)
         ? query.or(`id.eq.${normalizedOrderId},external_id.eq.${normalizedOrderId}`)

@@ -229,33 +229,8 @@ function toDbPayload(input: ProductInput) {
   };
 }
 
-const productSelect = [
-  'id',
-  'sku',
-  'name',
-  'barcode',
-  'description',
-  'client_id',
-  'category',
-  'weight',
-  'width',
-  'height',
-  'length',
-  'minimum_stock',
-  'current_stock',
-  'unit',
-  'price',
-  'currency',
-  'active',
-  'warehouse_positions',
-  'batches',
-  'expiration_dates',
-  'images',
-  'attachments',
-  'created_at',
-  'updated_at',
-  'clients(name)',
-].join(', ');
+const PRODUCT_SELECT =
+  'id, sku, name, barcode, description, client_id, category, weight, width, height, length, minimum_stock, current_stock, unit, price, currency, active, warehouse_positions, batches, expiration_dates, images, attachments, created_at, updated_at, clients(name)';
 
 export const productsService = {
   async list(): Promise<Product[]> {
@@ -273,7 +248,7 @@ export const productsService = {
     try {
       let query = getSupabaseServer()
         .from('products')
-        .select(productSelect, { count: 'exact' })
+        .select(PRODUCT_SELECT, { count: 'exact' })
         .order('name', { ascending: true })
         .range(from, to);
 
@@ -312,7 +287,7 @@ export const productsService = {
     try {
       const { data, error } = await getSupabaseServer()
         .from('products')
-        .select(productSelect)
+        .select(PRODUCT_SELECT)
         .eq('id', id)
         .maybeSingle();
 
@@ -334,7 +309,7 @@ export const productsService = {
       const { data, error } = await getSupabaseServer()
         .from('products')
         .insert(toDbPayload(normalizedInput))
-        .select(productSelect)
+        .select(PRODUCT_SELECT)
         .single();
 
       if (error) {
@@ -356,7 +331,7 @@ export const productsService = {
         .from('products')
         .update(toDbPayload(normalizedInput))
         .eq('id', id)
-        .select(productSelect)
+        .select(PRODUCT_SELECT)
         .maybeSingle();
 
       if (error) {

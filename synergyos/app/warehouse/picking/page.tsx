@@ -6,5 +6,5 @@ const mockPickingItems = [
 ];
 
 export default function WarehousePickingPage() {
-  return <PickingView locale="en" orderNumber="ORD-1001" items={mockPickingItems} />;
+  return <PickingView locale="cs" orderNumber="ORD-1001" items={mockPickingItems} />;
 }

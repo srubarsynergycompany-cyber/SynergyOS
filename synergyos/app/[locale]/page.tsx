@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import SynergyDashboard from "@/components/SynergyDashboard";
-import { defaultLocale, getDictionary, locales } from "@/lib/i18n/dictionaries";
+import { getDictionary, locales } from "@/lib/i18n/dictionaries";
 import type { Locale } from "@/lib/i18n/types";
 
 type PageProps = {

@@ -11,7 +11,7 @@ import { detectLocaleFromPath } from '@/utils/navigation';
 export function ReceivingView() {
   const pathname = usePathname();
   const locale = useMemo(() => detectLocaleFromPath(pathname), [pathname]);
-  const dictionary = useMemo(() => getDictionary(locale ?? 'en'), [locale]);
+  const dictionary = useMemo(() => getDictionary(locale ?? 'cs'), [locale]);
   const copy = dictionary.modules.warehouse.receiving;
   const receivingTasks = warehouseService.listReceivingTasks();
 

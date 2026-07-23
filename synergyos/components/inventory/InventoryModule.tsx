@@ -67,8 +67,8 @@ const initialMovements: StockMovement[] = [
   },
 ];
 
-const stockInReasons = ["Purchase Order", "Return", "Adjustment"];
-const stockOutReasons = ["Customer Order", "Damaged", "Internal Use", "Adjustment"];
+const stockInReasons = ["Nákupní objednávka", "Vratka", "Úprava"];
+const stockOutReasons = ["Zákaznická objednávka", "Poškozené zboží", "Interní použití", "Úprava"];
 
 function normalizeSku(rawSku: string) {
   return rawSku.trim().toUpperCase();
@@ -82,6 +82,16 @@ function getStockStatus(item: InventoryRecord): "In Stock" | "Low Stock" | "Out 
     return "Low Stock";
   }
   return "In Stock";
+}
+
+function getStockStatusLabel(status: "In Stock" | "Low Stock" | "Out of Stock") {
+  if (status === "Out of Stock") return "Vyprodáno";
+  if (status === "Low Stock") return "Nízká zásoba";
+  return "Skladem";
+}
+
+function getMovementTypeLabel(type: StockMovement["movementType"]) {
+  return type === "Stock In" ? "Příjem" : "Výdej";
 }
 
 function statusClasses(status: "In Stock" | "Low Stock" | "Out of Stock") {
@@ -144,21 +154,21 @@ export function InventoryModule() {
     const normalizedSku = normalizeSku(stockInForm.sku);
     const quantity = Number(stockInForm.quantity);
     if (!normalizedSku) {
-      setStockInError("SKU is required.");
+      setStockInError("SKU je povinné.");
       return;
     }
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      setStockInError("Quantity must be a positive whole number.");
+      setStockInError("Množství musí být kladné celé číslo.");
       return;
     }
     if (!stockInForm.reason) {
-      setStockInError("Reason is required.");
+      setStockInError("Důvod je povinný.");
       return;
     }
 
     const inventoryItem = inventoryItems.find((item) => item.sku === normalizedSku);
     if (!inventoryItem) {
-      setStockInError("SKU was not found in inventory.");
+      setStockInError("SKU nebylo ve skladu nalezeno.");
       return;
     }
 
@@ -189,25 +199,25 @@ export function InventoryModule() {
     const normalizedSku = normalizeSku(stockOutForm.sku);
     const quantity = Number(stockOutForm.quantity);
     if (!normalizedSku) {
-      setStockOutError("SKU is required.");
+      setStockOutError("SKU je povinné.");
       return;
     }
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      setStockOutError("Quantity must be a positive whole number.");
+      setStockOutError("Množství musí být kladné celé číslo.");
       return;
     }
     if (!stockOutForm.reason) {
-      setStockOutError("Reason is required.");
+      setStockOutError("Důvod je povinný.");
       return;
     }
 
     const inventoryItem = inventoryItems.find((item) => item.sku === normalizedSku);
     if (!inventoryItem) {
-      setStockOutError("SKU was not found in inventory.");
+      setStockOutError("SKU nebylo ve skladu nalezeno.");
       return;
     }
     if (quantity > inventoryItem.quantity) {
-      setStockOutError("Stock out quantity cannot exceed current quantity.");
+      setStockOutError("Vydané množství nesmí překročit aktuální zásobu.");
       return;
     }
 
@@ -235,33 +245,33 @@ export function InventoryModule() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.16),_transparent_28%),linear-gradient(135deg,_#020617,_#0f172a)] text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.32em] text-cyan-400">Inventory module</p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">Warehouse inventory workspace</h1>
-          <p className="mt-2 text-sm text-slate-400">Manage stock levels, execute stock movements, and track recent inventory activity.</p>
+          <p className="text-sm font-medium uppercase tracking-[0.32em] text-cyan-400">Skladový modul</p>
+          <h1 className="mt-2 text-3xl font-semibold text-white">Pracoviště skladové evidence</h1>
+          <p className="mt-2 text-sm text-slate-400">Spravujte zásoby, provádějte skladové pohyby a sledujte poslední aktivitu.</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Card title="Total SKUs">
+          <Card title="Celkem SKU">
             <p className="text-3xl font-semibold text-white">{overview.skuCount}</p>
           </Card>
-          <Card title="Total Units">
+          <Card title="Celkem kusů">
             <p className="text-3xl font-semibold text-white">{overview.totalUnits}</p>
           </Card>
-          <Card title="Low Stock">
+          <Card title="Nízká zásoba">
             <p className="text-3xl font-semibold text-amber-300">{overview.lowStockCount}</p>
           </Card>
-          <Card title="Out of Stock">
+          <Card title="Vyprodáno">
             <p className="text-3xl font-semibold text-rose-300">{overview.outOfStockCount}</p>
           </Card>
         </div>
 
-        <Card title="Inventory table" subtitle="Search by SKU or product name and monitor current stock health.">
+        <Card title="Skladová tabulka" subtitle="Vyhledávejte podle SKU nebo názvu produktu a sledujte stav zásob.">
           <label className="mb-4 block text-sm text-slate-300">
-            <span className="mb-2 block">Search SKU or Product</span>
+            <span className="mb-2 block">Vyhledat SKU nebo produkt</span>
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Type SKU or product name"
+              placeholder="Zadejte SKU nebo název produktu"
               className="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-white outline-none focus:border-cyan-400"
             />
           </label>
@@ -271,11 +281,11 @@ export function InventoryModule() {
               <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.2em] text-slate-400">
                 <tr>
                   <th className="px-4 py-3">SKU</th>
-                  <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3">Location</th>
-                  <th className="px-4 py-3">Quantity</th>
+                  <th className="px-4 py-3">Produkt</th>
+                  <th className="px-4 py-3">Lokace</th>
+                  <th className="px-4 py-3">Množství</th>
                   <th className="px-4 py-3">Minimum</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Stav</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -290,7 +300,7 @@ export function InventoryModule() {
                       <td className="px-4 py-4">{item.minimumStock}</td>
                       <td className="px-4 py-4">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusClasses(status)}`}>
-                          {status}
+                          {getStockStatusLabel(status)}
                         </span>
                       </td>
                     </tr>
@@ -302,7 +312,7 @@ export function InventoryModule() {
         </Card>
 
         <div className="grid gap-6 xl:grid-cols-2">
-          <Card title="Stock In" subtitle="Increase quantity for an existing SKU.">
+          <Card title="Příjem zásob" subtitle="Navýšit množství pro existující SKU.">
             <form className="space-y-4" onSubmit={handleStockInSubmit}>
               <label className="block text-sm text-slate-300">
                 <span className="mb-2 block">SKU</span>
@@ -314,7 +324,7 @@ export function InventoryModule() {
                 />
               </label>
               <label className="block text-sm text-slate-300">
-                <span className="mb-2 block">Quantity</span>
+                <span className="mb-2 block">Množství</span>
                 <input
                   value={stockInForm.quantity}
                   onChange={(event) => setStockInForm((state) => ({ ...state, quantity: event.target.value }))}
@@ -325,7 +335,7 @@ export function InventoryModule() {
                 />
               </label>
               <label className="block text-sm text-slate-300">
-                <span className="mb-2 block">Reason</span>
+                <span className="mb-2 block">Důvod</span>
                 <select
                   value={stockInForm.reason}
                   onChange={(event) => setStockInForm((state) => ({ ...state, reason: event.target.value }))}
@@ -337,11 +347,11 @@ export function InventoryModule() {
                 </select>
               </label>
               {stockInError ? <p className="text-sm text-rose-300">{stockInError}</p> : null}
-              <Button type="submit">Submit Stock In</Button>
+              <Button type="submit">Potvrdit příjem</Button>
             </form>
           </Card>
 
-          <Card title="Stock Out" subtitle="Decrease quantity for an existing SKU.">
+          <Card title="Výdej zásob" subtitle="Snížit množství pro existující SKU.">
             <form className="space-y-4" onSubmit={handleStockOutSubmit}>
               <label className="block text-sm text-slate-300">
                 <span className="mb-2 block">SKU</span>
@@ -353,7 +363,7 @@ export function InventoryModule() {
                 />
               </label>
               <label className="block text-sm text-slate-300">
-                <span className="mb-2 block">Quantity</span>
+                <span className="mb-2 block">Množství</span>
                 <input
                   value={stockOutForm.quantity}
                   onChange={(event) => setStockOutForm((state) => ({ ...state, quantity: event.target.value }))}
@@ -364,7 +374,7 @@ export function InventoryModule() {
                 />
               </label>
               <label className="block text-sm text-slate-300">
-                <span className="mb-2 block">Reason</span>
+                <span className="mb-2 block">Důvod</span>
                 <select
                   value={stockOutForm.reason}
                   onChange={(event) => setStockOutForm((state) => ({ ...state, reason: event.target.value }))}
@@ -376,22 +386,22 @@ export function InventoryModule() {
                 </select>
               </label>
               {stockOutError ? <p className="text-sm text-rose-300">{stockOutError}</p> : null}
-              <Button type="submit">Submit Stock Out</Button>
+              <Button type="submit">Potvrdit výdej</Button>
             </form>
           </Card>
         </div>
 
-        <Card title="Recent stock movements" subtitle="Latest inventory adjustments recorded in this session.">
+        <Card title="Poslední skladové pohyby" subtitle="Nejnovější úpravy zásob zaznamenané v této relaci.">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-800 text-left text-sm text-slate-300">
               <thead className="bg-slate-950/70 text-xs uppercase tracking-[0.2em] text-slate-400">
                 <tr>
-                  <th className="px-4 py-3">Time</th>
+                  <th className="px-4 py-3">Čas</th>
                   <th className="px-4 py-3">SKU</th>
-                  <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Quantity</th>
-                  <th className="px-4 py-3">Reason</th>
+                  <th className="px-4 py-3">Produkt</th>
+                  <th className="px-4 py-3">Typ</th>
+                  <th className="px-4 py-3">Množství</th>
+                  <th className="px-4 py-3">Důvod</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -400,7 +410,7 @@ export function InventoryModule() {
                     <td className="px-4 py-4 text-slate-400">{new Date(movement.createdAt).toLocaleString()}</td>
                     <td className="px-4 py-4 font-semibold text-white">{movement.sku}</td>
                     <td className="px-4 py-4">{movement.productName}</td>
-                    <td className="px-4 py-4">{movement.movementType}</td>
+                    <td className="px-4 py-4">{getMovementTypeLabel(movement.movementType)}</td>
                     <td className="px-4 py-4">{movement.quantity}</td>
                     <td className="px-4 py-4">{movement.reason}</td>
                   </tr>

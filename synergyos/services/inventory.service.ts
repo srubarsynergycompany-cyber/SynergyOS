@@ -1,56 +1,48 @@
-import { prisma } from '@/lib/database/prisma';
-import { mockInventory } from '@/services/mockData';
+import { getSupabaseServer } from '@/lib/supabase-server';
 import type { InventoryItem } from '@/types';
 
-function mapDbInventory(row: {
+type InventoryRow = {
   id: string;
-  quantity: number;
-  reserved: number;
-  minimumStock: number;
-  status: string;
-  product: { sku: string; name: string };
-  warehouseLocation: { code: string } | null;
-}): InventoryItem {
-  const available = row.quantity - row.reserved;
+  product_id: string;
+  quantity: number | null;
+  reserved: number | null;
+  minimum_stock: number | null;
+  status: string | null;
+  location: string | null;
+  products?: {
+    sku: string | null;
+    name: string | null;
+  } | null;
+};
+
+function mapInventory(row: InventoryRow): InventoryItem {
+  const quantity = row.quantity ?? 0;
+  const reserved = row.reserved ?? 0;
+
   return {
     id: row.id,
-    sku: row.product.sku,
-    productName: row.product.name,
-    locationCode: row.warehouseLocation?.code ?? 'UNASSIGNED',
-    quantity: row.quantity,
-    reserved: row.reserved,
-    available,
-    minimumStock: row.minimumStock,
-    status: row.status,
+    sku: row.products?.sku ?? row.product_id,
+    productName: row.products?.name ?? 'Unknown product',
+    locationCode: row.location ?? 'UNASSIGNED',
+    quantity,
+    reserved,
+    available: quantity - reserved,
+    minimumStock: row.minimum_stock ?? 0,
+    status: row.status ?? 'In stock',
   };
 }
 
 export const inventoryService = {
   async list(): Promise<InventoryItem[]> {
-    if (!prisma) {
-      return mockInventory;
+    const { data, error } = await getSupabaseServer()
+      .from('inventory')
+      .select('id, product_id, quantity, reserved, minimum_stock, status, location, products(sku, name)')
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      throw new Error(error.message);
     }
 
-    try {
-      const rows = await prisma.inventoryItem.findMany({
-        include: {
-          product: {
-            select: {
-              sku: true,
-              name: true,
-            },
-          },
-          warehouseLocation: {
-            select: {
-              code: true,
-            },
-          },
-        },
-        orderBy: { updatedAt: 'desc' },
-      });
-      return rows.map(mapDbInventory);
-    } catch {
-      return mockInventory;
-    }
+    return ((data ?? []) as InventoryRow[]).map(mapInventory);
   },
 };

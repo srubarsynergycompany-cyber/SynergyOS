@@ -1,15 +1,16 @@
-import { prisma } from '@/lib/database/prisma';
-import { mockCustomers } from '@/services/mockData';
+import { getSupabaseServer } from '@/lib/supabase-server';
 import type { Customer } from '@/types';
 
-function mapDbCustomer(row: {
+type CustomerRow = {
   id: string;
   name: string;
   email: string | null;
   phone: string | null;
   tier: string | null;
   address: string | null;
-}): Customer {
+};
+
+function mapCustomer(row: CustomerRow): Customer {
   return {
     id: row.id,
     name: row.name,
@@ -22,17 +23,15 @@ function mapDbCustomer(row: {
 
 export const customersService = {
   async list(): Promise<Customer[]> {
-    if (!prisma) {
-      return mockCustomers;
+    const { data, error } = await getSupabaseServer()
+      .from('clients')
+      .select('id, name, email, phone, tier, address')
+      .order('name', { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
     }
 
-    try {
-      const rows = await prisma.customer.findMany({
-        orderBy: { name: 'asc' },
-      });
-      return rows.map(mapDbCustomer);
-    } catch {
-      return mockCustomers;
-    }
+    return ((data ?? []) as CustomerRow[]).map(mapCustomer);
   },
 };

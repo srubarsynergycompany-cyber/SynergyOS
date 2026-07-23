@@ -16,7 +16,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const locale = useMemo(() => detectLocaleFromPath(pathname), [pathname]);
-  const dictionary = useMemo(() => getDictionary(locale ?? 'en'), [locale]);
+  const dictionary = useMemo(() => getDictionary(locale ?? 'cs'), [locale]);
   const navigationItems = useMemo(() => getShellNavigationItems(locale), [locale]);
   const breadcrumbRouteMap = useMemo(
     () =>
@@ -108,14 +108,14 @@ export function AppShell({ children }: AppShellProps) {
 
               <div className="flex items-center gap-3">
                 <Button variant="secondary" size="sm">
-                  Notifications
+                  {locale === 'en' ? 'Notifications' : 'Upozornění'}
                   <span className="ml-2 rounded-full border border-amber-500/40 bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">3</span>
                 </Button>
                 <div className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-500/20 text-sm font-semibold text-cyan-300">JS</div>
                   <div>
                     <p className="text-sm font-medium text-white">Jane Smith</p>
-                    <p className="text-xs text-slate-400">Warehouse Lead</p>
+                    <p className="text-xs text-slate-400">{locale === 'en' ? 'Warehouse Lead' : 'Vedoucí skladu'}</p>
                   </div>
                 </div>
               </div>

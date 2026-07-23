@@ -1,5 +1,5 @@
 import { ModulePage } from '@/components/layout/ModulePage';
 
 export default function CustomersPage() {
-  return <ModulePage title="Customers" description="Account health, SLA visibility, and customer operations." />;
+  return <ModulePage title="Zákazníci" description="Stav účtů, přehled SLA a zákaznické operace." />;
 }

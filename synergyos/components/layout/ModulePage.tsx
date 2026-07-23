@@ -17,11 +17,11 @@ type ModulePageProps = {
 export function ModulePage({
   title,
   description,
-  badgeLabel = 'Foundation module',
-  readySuffix = 'module is ready',
-  readyDescription = 'This section now uses the global app shell, design system, and shared service layer.',
-  goToDashboardLabel = 'Go to Dashboard',
-  dashboardHref = '/dashboard',
+  badgeLabel = 'Základní modul',
+  readySuffix = 'je připravený',
+  readyDescription = 'Tato sekce používá globální rozhraní aplikace, design systém a sdílenou servisní vrstvu.',
+  goToDashboardLabel = 'Přejít na dashboard',
+  dashboardHref = '/cs/dashboard',
 }: ModulePageProps) {
   return (
     <Card title={title} subtitle={description} action={<StatusBadge label={badgeLabel} tone="slate" />}>

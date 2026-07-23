@@ -22,3 +22,4 @@ export default async function LocaleProductsPage({ params }: LocalePageProps) {
 }
 
 export const dynamicParams = false;
+export const dynamic = 'force-dynamic';

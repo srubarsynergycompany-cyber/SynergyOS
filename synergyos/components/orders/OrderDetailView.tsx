@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { OrderHeader } from "@/components/orders/OrderHeader";
 import type { Dictionary } from "@/lib/i18n/types";
 import type { Order } from "@/lib/orders/mockData";
-import { mapMockOrderToOrderDto, mapOrderDtoToUiOrder, type OrderDto } from "@/types";
 
 type OrderDetailViewProps = {
   initialOrder: Order;
@@ -74,57 +73,28 @@ function salesChannelBadgeClasses(channel: Order["salesChannel"]) {
     : "border border-indigo-500/40 bg-indigo-500/10 text-indigo-300";
 }
 
-function formatApiTotal(order: OrderDto): string {
-  return `${order.totalAmount.toFixed(2)} ${order.currency}`;
-}
-
-function adaptMockOrderForDetail(order: Order): Order {
-  const mapped = mapOrderDtoToUiOrder(mapMockOrderToOrderDto(order));
+function toItemState(product: Order["products"][number], initialStatus: WorkspaceStatus): ItemState {
+  const pickedByDefault = initialStatus === "packed" || initialStatus === "ready_to_ship" || initialStatus === "shipped";
 
   return {
-    ...order,
-    id: mapped.id,
-    orderNumber: mapped.orderNumber,
-    status: mapped.status,
-    createdAt: mapped.createdAt,
-    priority: mapped.priority,
-  };
-}
-
-function mergeOrderFromDto(base: Order, dto: OrderDto): Order {
-  const mapped = mapOrderDtoToUiOrder(dto);
-
-  return {
-    ...base,
-    id: mapped.id || base.id,
-    orderNumber: mapped.orderNumber || base.orderNumber,
-    customer: mapped.customer || base.customer,
-    company: mapped.company || base.company,
-    status: mapped.status,
-    createdAt: mapped.createdAt || base.createdAt,
-    updatedAt: mapped.updatedAt || base.updatedAt,
-    priority: mapped.priority,
-    total: formatApiTotal(dto),
+    sku: product.sku,
+    name: product.name,
+    location: product.location,
+    requiredQuantity: product.quantity,
+    pickedQuantity: pickedByDefault ? product.quantity : 0,
+    picked: pickedByDefault,
+    packed: initialStatus === "packed" || initialStatus === "ready_to_ship" || initialStatus === "shipped",
   };
 }
 
 export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetailViewProps) {
-  const [order, setOrder] = useState(() => adaptMockOrderForDetail(initialOrder));
+  const [order, setOrder] = useState(initialOrder);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("overview");
   const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>(() => mapInitialStatus(initialOrder.status));
   const [items, setItems] = useState<ItemState[]>(() => {
     const initialStatus = mapInitialStatus(initialOrder.status);
-    const pickedByDefault = initialStatus === "packed" || initialStatus === "ready_to_ship" || initialStatus === "shipped";
-    return initialOrder.products.map((product) => ({
-      sku: product.sku,
-      name: product.name,
-      location: product.location,
-      requiredQuantity: product.quantity,
-      pickedQuantity: pickedByDefault ? product.quantity : 0,
-      picked: pickedByDefault,
-      packed: initialStatus === "packed" || initialStatus === "ready_to_ship" || initialStatus === "shipped",
-    }));
+    return initialOrder.products.map((product) => toItemState(product, initialStatus));
   });
   const [packingChecklist, setPackingChecklist] = useState<PackingChecklist>({
     productsVerified: false,
@@ -161,14 +131,16 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
           throw new Error("Failed to load order detail from API.");
         }
 
-        const payload = (await response.json()) as OrderDto;
+        const payload = (await response.json()) as Order;
         if (!cancelled) {
-          setOrder((current) => mergeOrderFromDto(current, payload));
+          const nextStatus = mapInitialStatus(payload.status);
+          setOrder(payload);
+          setWorkspaceStatus(nextStatus);
+          setItems(payload.products.map((product) => toItemState(product, nextStatus)));
         }
       } catch {
         if (!cancelled) {
-          // Explicit fallback: preserve initial detail payload when API is unavailable.
-          setOrder(adaptMockOrderForDetail(initialOrder));
+          setOrder(initialOrder);
           setLoadError("Orders API detail is unavailable. Showing fallback data.");
         }
       }

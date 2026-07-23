@@ -90,6 +90,8 @@ function toItemState(product: Order["products"][number], initialStatus: Workspac
 export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetailViewProps) {
   const [order, setOrder] = useState(initialOrder);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [statusActionError, setStatusActionError] = useState<string | null>(null);
+  const [isStartingPicking, setIsStartingPicking] = useState(false);
   const [mode, setMode] = useState<WorkspaceMode>("overview");
   const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>(() => mapInitialStatus(initialOrder.status));
   const [items, setItems] = useState<ItemState[]>(() => {
@@ -224,10 +226,42 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     pushTimeline(`Zmena stavu: ${getOrderStatusDisplay(next)}`);
   }
 
-  function handleStartPicking() {
-    setMode("picking");
-    setWorkspaceStatus("picking");
-    pushTimeline(dictionary?.orders?.detail?.timeline?.picking ?? "Sber zahajen");
+  async function handleStartPicking() {
+    if (isStartingPicking) {
+      return;
+    }
+
+    try {
+      setStatusActionError(null);
+      setIsStartingPicking(true);
+
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nextStatus: "picking" }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? "Failed to update order status.");
+      }
+
+      const payload = (await response.json()) as Order;
+      const nextStatus = mapInitialStatus(payload.status);
+
+      setOrder(payload);
+      setWorkspaceStatus(nextStatus);
+      setItems(payload.products.map((product) => toItemState(product, nextStatus)));
+      setMode("picking");
+      pushTimeline(dictionary?.orders?.detail?.timeline?.picking ?? "Sber zahajen");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update order status.";
+      setStatusActionError(message);
+    } finally {
+      setIsStartingPicking(false);
+    }
   }
 
   function handleOpenPacking() {
@@ -591,10 +625,12 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
 
             <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40">
               <h3 className="text-xl font-semibold text-white">{dictionary?.orders?.detail?.warehouse?.title ?? "Skladove akce"}</h3>
+              {statusActionError ? <p className="mt-4 text-sm text-rose-300">{statusActionError}</p> : null}
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   onClick={handleStartPicking}
-                  className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20"
+                  disabled={isStartingPicking}
+                  className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {dictionary?.orders?.detail?.warehouse?.startPicking ?? "Zahajit sber"}
                 </button>

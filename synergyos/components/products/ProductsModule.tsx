@@ -70,7 +70,7 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
@@ -314,7 +314,8 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
         setSelectedId(null);
       }
 
-      await loadProducts(page);
+      const nextPage = items.length === 1 && page > 1 ? page - 1 : page;
+      await loadProducts(nextPage);
     } catch {
       setMutationError("Produkt se nepodařilo smazat kvůli chybě sítě.");
     } finally {
@@ -378,8 +379,9 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
 
         {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
         {mutationError ? <p className="mt-4 text-sm text-rose-300">{mutationError}</p> : null}
+        {loading ? <p className="mt-4 text-sm text-cyan-300">Načítám produkty…</p> : null}
 
-        {items.length === 0 && !loading ? (
+        {items.length === 0 && loading ? null : items.length === 0 ? (
           <div className="mt-6">
             <EmptyState title={copy.emptyTitle} description={copy.emptyDescription} />
           </div>

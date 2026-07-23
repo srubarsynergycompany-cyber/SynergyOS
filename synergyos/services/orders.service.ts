@@ -244,7 +244,7 @@ export const ordersService = {
 
       query = isUuid(normalizedOrderId)
         ? query.or(`id.eq.${normalizedOrderId},external_id.eq.${normalizedOrderId}`)
-        : query.eq('external_id', normalizedOrderId);
+        : query.ilike('external_id', normalizedOrderId);
 
       const { data, error } = await query.maybeSingle();
 

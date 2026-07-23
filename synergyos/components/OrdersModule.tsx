@@ -76,7 +76,8 @@ function mapApiOrderToViewModel(item: ApiOrderListItem): Order {
 }
 
 export default function OrdersModule({ dictionary, locale }: OrdersModuleProps) {
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -107,13 +108,17 @@ export default function OrdersModule({ dictionary, locale }: OrdersModuleProps) 
         const mapped = apiItems.map(mapApiOrderToViewModel);
 
         if (!cancelled) {
-          setOrders(mapped.length > 0 ? mapped : mockOrders);
+          setOrders(mapped);
         }
       } catch {
         if (!cancelled) {
           // Explicit fallback: keep module usable with local fixtures if API is unavailable.
           setOrders(mockOrders);
           setLoadError("Orders API is unavailable. Showing fallback data.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
         }
       }
     }
@@ -357,7 +362,13 @@ export default function OrdersModule({ dictionary, locale }: OrdersModuleProps) 
               </tr>
             </thead>
             <tbody>
-              {pagedOrders.map((order) => (
+              {isLoading ? (
+                <tr className="border-t border-slate-800 bg-slate-900/60">
+                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
+                    Loading...
+                  </td>
+                </tr>
+              ) : pagedOrders.map((order) => (
                 <tr key={order.id} className="border-t border-slate-800 bg-slate-900/60">
                   <td className="px-4 py-3 font-semibold text-slate-100">{order.orderNumber}</td>
                   <td className="px-4 py-3">

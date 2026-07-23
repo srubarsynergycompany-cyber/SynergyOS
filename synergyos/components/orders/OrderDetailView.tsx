@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { OrderHeader } from "@/components/orders/OrderHeader";
 import type { Dictionary } from "@/lib/i18n/types";
 import type { Order } from "@/lib/orders/mockData";
+import { getNextStatus } from "@/lib/orders/stateMachine";
 
 type OrderDetailViewProps = {
   initialOrder: Order;
@@ -19,6 +20,7 @@ type WorkspaceStatus =
   | "packed"
   | "ready_to_ship"
   | "shipped"
+  | "delivered"
   | "cancelled";
 
 type WorkspaceMode = "overview" | "picking" | "packing";
@@ -49,13 +51,14 @@ type PackingChecklist = {
 function mapInitialStatus(status: Order["status"]): WorkspaceStatus {
   if (status === "picking") return "picking";
   if (status === "packed") return "packed";
-  if (status === "shipped" || status === "delivered") return "shipped";
+  if (status === "shipped") return "shipped";
+  if (status === "delivered") return "delivered";
   return "new";
 }
 
 function statusBadgeClasses(status: WorkspaceStatus) {
   if (status === "cancelled") return "border border-rose-500/40 bg-rose-500/10 text-rose-300";
-  if (status === "shipped") return "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  if (status === "shipped" || status === "delivered") return "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
   if (status === "packed" || status === "ready_to_ship") return "border border-cyan-500/40 bg-cyan-500/10 text-cyan-300";
   if (status === "picking" || status === "ready_for_picking") return "border border-amber-500/40 bg-amber-500/10 text-amber-300";
   return "border border-slate-600 bg-slate-700/30 text-slate-200";
@@ -74,7 +77,11 @@ function salesChannelBadgeClasses(channel: Order["salesChannel"]) {
 }
 
 function toItemState(product: Order["products"][number], initialStatus: WorkspaceStatus): ItemState {
-  const pickedByDefault = initialStatus === "packed" || initialStatus === "ready_to_ship" || initialStatus === "shipped";
+  const pickedByDefault =
+    initialStatus === "packed" ||
+    initialStatus === "ready_to_ship" ||
+    initialStatus === "shipped" ||
+    initialStatus === "delivered";
 
   return {
     sku: product.sku,
@@ -83,7 +90,11 @@ function toItemState(product: Order["products"][number], initialStatus: Workspac
     requiredQuantity: product.quantity,
     pickedQuantity: pickedByDefault ? product.quantity : 0,
     picked: pickedByDefault,
-    packed: initialStatus === "packed" || initialStatus === "ready_to_ship" || initialStatus === "shipped",
+    packed:
+      initialStatus === "packed" ||
+      initialStatus === "ready_to_ship" ||
+      initialStatus === "shipped" ||
+      initialStatus === "delivered",
   };
 }
 
@@ -92,6 +103,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusActionError, setStatusActionError] = useState<string | null>(null);
   const [isStartingPicking, setIsStartingPicking] = useState(false);
+  const [isOpeningPacking, setIsOpeningPacking] = useState(false);
   const [mode, setMode] = useState<WorkspaceMode>("overview");
   const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>(() => mapInitialStatus(initialOrder.status));
   const [items, setItems] = useState<ItemState[]>(() => {
@@ -155,15 +167,8 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     };
   }, [initialOrder]);
 
-  const statusOptions: WorkspaceStatus[] = [
-    "new",
-    "ready_for_picking",
-    "picking",
-    "packed",
-    "ready_to_ship",
-    "shipped",
-    "cancelled",
-  ];
+  const nextStatus = getNextStatus(order.status);
+  const statusOptions: Order["status"][] = nextStatus ? [order.status, nextStatus] : [order.status];
 
   function getPriorityDisplay(value: Order["priority"]) {
     if (value === "High") return dictionary?.orders?.detail?.valueLabels?.priority?.high ?? "High";
@@ -187,6 +192,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     if (value === "packed") return dictionary?.orders?.detail?.valueLabels?.status?.packed ?? dictionary?.orders?.statuses?.packed ?? "Packed";
     if (value === "ready_to_ship") return dictionary?.orders?.detail?.valueLabels?.status?.ready_to_ship ?? "Ready to ship";
     if (value === "shipped") return dictionary?.orders?.detail?.valueLabels?.status?.shipped ?? dictionary?.orders?.statuses?.shipped ?? "Shipped";
+    if (value === "delivered") return dictionary?.orders?.statuses?.delivered ?? "Delivered";
     if (value === "cancelled") return dictionary?.orders?.detail?.valueLabels?.status?.cancelled ?? "Cancelled";
     return value;
   }
@@ -202,6 +208,9 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
   const totalItemsCount = items.length;
   const pickingProgressPercent = totalItemsCount === 0 ? 0 : Math.round((pickedItemsCount / totalItemsCount) * 100);
   const isPickingComplete = totalItemsCount > 0 && pickedItemsCount === totalItemsCount;
+  const isStatusRequestPending = isStartingPicking || isOpeningPacking;
+  const canStartPicking = order.status === "new" && !isStatusRequestPending;
+  const canOpenPacking = order.status === "picking" && isPickingComplete && !isStatusRequestPending;
 
   const completedPackingChecks = packingChecklistEntries.filter((entry) => packingChecklist[entry.key]).length;
   const packingProgressPercent = Math.round((completedPackingChecks / packingChecklistEntries.length) * 100);
@@ -221,13 +230,45 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     ]);
   }
 
-  function handleStatusChange(next: WorkspaceStatus) {
-    setWorkspaceStatus(next);
-    pushTimeline(`Zmena stavu: ${getOrderStatusDisplay(next)}`);
+  async function handleStatusChange(next: Order["status"]) {
+    if (next === order.status || isStartingPicking) {
+      return;
+    }
+
+    try {
+      setStatusActionError(null);
+      setIsStartingPicking(true);
+
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nextStatus: next }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? "Failed to update order status.");
+      }
+
+      const payload = (await response.json()) as Order;
+      const nextWorkspaceStatus = mapInitialStatus(payload.status);
+
+      setOrder(payload);
+      setWorkspaceStatus(nextWorkspaceStatus);
+      setItems(payload.products.map((product) => toItemState(product, nextWorkspaceStatus)));
+      pushTimeline(`Zmena stavu: ${getOrderStatusDisplay(nextWorkspaceStatus)}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update order status.";
+      setStatusActionError(message);
+    } finally {
+      setIsStartingPicking(false);
+    }
   }
 
   async function handleStartPicking() {
-    if (isStartingPicking) {
+    if (order.status !== "new" || isStatusRequestPending) {
       return;
     }
 
@@ -264,15 +305,42 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     }
   }
 
-  function handleOpenPacking() {
-    if (!isPickingComplete) {
+  async function handleOpenPacking() {
+    if (order.status !== "picking" || !isPickingComplete || isStatusRequestPending) {
       return;
     }
 
-    setMode("packing");
-    setWorkspaceStatus("packed");
-    setItems((current) => current.map((item) => ({ ...item, packed: true })));
-    pushTimeline(dictionary?.orders?.detail?.timeline?.packed ?? "Baleni zahajeno");
+    try {
+      setStatusActionError(null);
+      setIsOpeningPacking(true);
+
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nextStatus: "packed" }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? "Failed to update order status.");
+      }
+
+      const payload = (await response.json()) as Order;
+      const nextStatus = mapInitialStatus(payload.status);
+
+      setOrder(payload);
+      setWorkspaceStatus(nextStatus);
+      setItems(payload.products.map((product) => toItemState(product, nextStatus)));
+      setMode("packing");
+      pushTimeline(dictionary?.orders?.detail?.timeline?.packed ?? "Baleni zahajeno");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update order status.";
+      setStatusActionError(message);
+    } finally {
+      setIsOpeningPacking(false);
+    }
   }
 
   function handlePickItem(sku: string) {
@@ -351,12 +419,13 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                 {dictionary?.orders?.statusLabel ?? "Stav"}
               </label>
               <select
-                value={workspaceStatus}
-                onChange={(event) => handleStatusChange(event.target.value as WorkspaceStatus)}
+                value={order.status}
+                onChange={(event) => handleStatusChange(event.target.value as Order["status"])}
+                disabled={isStartingPicking || !nextStatus}
                 className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100"
               >
                 {statusOptions.map((status) => (
-                  <option key={status} value={status}>
+                  <option key={status} value={status} disabled={status === order.status}>
                     {getOrderStatusDisplay(status)}
                   </option>
                 ))}
@@ -399,6 +468,8 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                 <div className="h-full bg-cyan-400 transition-all duration-300" style={{ width: `${pickingProgressPercent}%` }} />
               </div>
             </div>
+
+            {statusActionError ? <p className="mt-4 text-sm text-rose-300">{statusActionError}</p> : null}
 
             <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-800">
               <table className="min-w-full text-left text-sm">
@@ -443,8 +514,8 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
             <div className="mt-6 flex flex-wrap gap-3">
               <button
                 onClick={handleOpenPacking}
-                disabled={!isPickingComplete}
-                className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${isPickingComplete ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20" : "cursor-not-allowed border-slate-700 bg-slate-900/70 text-slate-500"}`}
+                disabled={!canOpenPacking}
+                className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${canOpenPacking ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20" : "cursor-not-allowed border-slate-700 bg-slate-900/70 text-slate-500"}`}
               >
                 Zahajit baleni
               </button>
@@ -629,15 +700,15 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   onClick={handleStartPicking}
-                  disabled={isStartingPicking}
+                  disabled={!canStartPicking}
                   className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {dictionary?.orders?.detail?.warehouse?.startPicking ?? "Zahajit sber"}
                 </button>
                 <button
                   onClick={handleOpenPacking}
-                  disabled={!isPickingComplete}
-                  className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${isPickingComplete ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20" : "cursor-not-allowed border-slate-700 bg-slate-900/70 text-slate-500"}`}
+                  disabled={!canOpenPacking}
+                  className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${canOpenPacking ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20" : "cursor-not-allowed border-slate-700 bg-slate-900/70 text-slate-500"}`}
                 >
                   Zahajit baleni
                 </button>

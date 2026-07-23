@@ -18,7 +18,6 @@ type WorkspaceStatus =
   | "ready_for_picking"
   | "picking"
   | "packed"
-  | "ready_to_ship"
   | "shipped"
   | "delivered"
   | "cancelled";
@@ -59,7 +58,7 @@ function mapInitialStatus(status: Order["status"]): WorkspaceStatus {
 function statusBadgeClasses(status: WorkspaceStatus) {
   if (status === "cancelled") return "border border-rose-500/40 bg-rose-500/10 text-rose-300";
   if (status === "shipped" || status === "delivered") return "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
-  if (status === "packed" || status === "ready_to_ship") return "border border-cyan-500/40 bg-cyan-500/10 text-cyan-300";
+  if (status === "packed") return "border border-cyan-500/40 bg-cyan-500/10 text-cyan-300";
   if (status === "picking" || status === "ready_for_picking") return "border border-amber-500/40 bg-amber-500/10 text-amber-300";
   return "border border-slate-600 bg-slate-700/30 text-slate-200";
 }
@@ -79,7 +78,6 @@ function salesChannelBadgeClasses(channel: Order["salesChannel"]) {
 function toItemState(product: Order["products"][number], initialStatus: WorkspaceStatus): ItemState {
   const pickedByDefault =
     initialStatus === "packed" ||
-    initialStatus === "ready_to_ship" ||
     initialStatus === "shipped" ||
     initialStatus === "delivered";
 
@@ -92,7 +90,6 @@ function toItemState(product: Order["products"][number], initialStatus: Workspac
     picked: pickedByDefault,
     packed:
       initialStatus === "packed" ||
-      initialStatus === "ready_to_ship" ||
       initialStatus === "shipped" ||
       initialStatus === "delivered",
   };
@@ -103,7 +100,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusActionError, setStatusActionError] = useState<string | null>(null);
   const [isStartingPicking, setIsStartingPicking] = useState(false);
-  const [isOpeningPacking, setIsOpeningPacking] = useState(false);
+  const [isCompletingPacking, setIsCompletingPacking] = useState(false);
   const [mode, setMode] = useState<WorkspaceMode>("overview");
   const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>(() => mapInitialStatus(initialOrder.status));
   const [items, setItems] = useState<ItemState[]>(() => {
@@ -190,7 +187,6 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     if (value === "ready_for_picking") return dictionary?.orders?.detail?.valueLabels?.status?.ready_for_picking ?? "Ready for picking";
     if (value === "picking") return dictionary?.orders?.detail?.valueLabels?.status?.picking ?? dictionary?.orders?.statuses?.picking ?? "Picking";
     if (value === "packed") return dictionary?.orders?.detail?.valueLabels?.status?.packed ?? dictionary?.orders?.statuses?.packed ?? "Packed";
-    if (value === "ready_to_ship") return dictionary?.orders?.detail?.valueLabels?.status?.ready_to_ship ?? "Ready to ship";
     if (value === "shipped") return dictionary?.orders?.detail?.valueLabels?.status?.shipped ?? dictionary?.orders?.statuses?.shipped ?? "Shipped";
     if (value === "delivered") return dictionary?.orders?.statuses?.delivered ?? "Delivered";
     if (value === "cancelled") return dictionary?.orders?.detail?.valueLabels?.status?.cancelled ?? "Cancelled";
@@ -208,13 +204,16 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
   const totalItemsCount = items.length;
   const pickingProgressPercent = totalItemsCount === 0 ? 0 : Math.round((pickedItemsCount / totalItemsCount) * 100);
   const isPickingComplete = totalItemsCount > 0 && pickedItemsCount === totalItemsCount;
-  const isStatusRequestPending = isStartingPicking || isOpeningPacking;
+  const isStatusRequestPending = isStartingPicking || isCompletingPacking;
   const canStartPicking = order.status === "new" && !isStatusRequestPending;
   const canOpenPacking = order.status === "picking" && isPickingComplete && !isStatusRequestPending;
 
   const completedPackingChecks = packingChecklistEntries.filter((entry) => packingChecklist[entry.key]).length;
   const packingProgressPercent = Math.round((completedPackingChecks / packingChecklistEntries.length) * 100);
-  const canCompletePacking = completedPackingChecks === packingChecklistEntries.length;
+  const canCompletePacking =
+    order.status === "picking" &&
+    completedPackingChecks === packingChecklistEntries.length &&
+    !isStatusRequestPending;
 
   const formatDateTime = (iso: string) =>
     new Date(iso).toLocaleString(locale === "cs" ? "cs-CZ" : "en-US");
@@ -231,7 +230,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
   }
 
   async function handleStatusChange(next: Order["status"]) {
-    if (next === order.status || isStartingPicking) {
+    if (next === order.status || isStatusRequestPending) {
       return;
     }
 
@@ -305,42 +304,13 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     }
   }
 
-  async function handleOpenPacking() {
+  function handleOpenPacking() {
     if (order.status !== "picking" || !isPickingComplete || isStatusRequestPending) {
       return;
     }
 
-    try {
-      setStatusActionError(null);
-      setIsOpeningPacking(true);
-
-      const response = await fetch(`/api/orders/${encodeURIComponent(order.id)}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ nextStatus: "packed" }),
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(payload?.message ?? "Failed to update order status.");
-      }
-
-      const payload = (await response.json()) as Order;
-      const nextStatus = mapInitialStatus(payload.status);
-
-      setOrder(payload);
-      setWorkspaceStatus(nextStatus);
-      setItems(payload.products.map((product) => toItemState(product, nextStatus)));
-      setMode("packing");
-      pushTimeline(dictionary?.orders?.detail?.timeline?.packed ?? "Baleni zahajeno");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update order status.";
-      setStatusActionError(message);
-    } finally {
-      setIsOpeningPacking(false);
-    }
+    setMode("packing");
+    pushTimeline(dictionary?.orders?.detail?.timeline?.packed ?? "Baleni zahajeno");
   }
 
   function handlePickItem(sku: string) {
@@ -369,14 +339,42 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
     pushTimeline("Tisk prepravniho stitku");
   }
 
-  function handleCompletePacking() {
-    if (!canCompletePacking) {
+  async function handleCompletePacking() {
+    if (order.status !== "picking" || !canCompletePacking || isStatusRequestPending) {
       return;
     }
 
-    setWorkspaceStatus("ready_to_ship");
-    pushTimeline(dictionary?.orders?.detail?.timeline?.done ?? "Baleni dokonceno");
-    setMode("overview");
+    try {
+      setStatusActionError(null);
+      setIsCompletingPacking(true);
+
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nextStatus: "packed" }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? "Failed to update order status.");
+      }
+
+      const payload = (await response.json()) as Order;
+      const nextStatus = mapInitialStatus(payload.status);
+
+      setOrder(payload);
+      setWorkspaceStatus(nextStatus);
+      setItems(payload.products.map((product) => toItemState(product, nextStatus)));
+      pushTimeline(dictionary?.orders?.detail?.timeline?.done ?? "Baleni dokonceno");
+      setMode("overview");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update order status.";
+      setStatusActionError(message);
+    } finally {
+      setIsCompletingPacking(false);
+    }
   }
 
   return (
@@ -421,7 +419,7 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
               <select
                 value={order.status}
                 onChange={(event) => handleStatusChange(event.target.value as Order["status"])}
-                disabled={isStartingPicking || !nextStatus}
+                disabled={isStatusRequestPending || !nextStatus}
                 className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100"
               >
                 {statusOptions.map((status) => (
@@ -578,6 +576,8 @@ export function OrderDetailView({ initialOrder, locale, dictionary }: OrderDetai
                 ))}
               </div>
             </section>
+
+            {statusActionError ? <p className="mt-4 text-sm text-rose-300">{statusActionError}</p> : null}
 
             <div className="mt-6 flex flex-wrap gap-3">
               <button

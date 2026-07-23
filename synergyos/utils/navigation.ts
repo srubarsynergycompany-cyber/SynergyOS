@@ -38,7 +38,7 @@ export function localizeHref(href: string, locale: Locale | null): string {
 }
 
 export function getShellNavigationItems(locale: Locale | null) {
-  const dictionary = getDictionary(locale ?? 'en');
+  const dictionary = getDictionary(locale ?? 'cs');
   return shellNavigationConfig.map((item) => ({
     ...item,
     href: localizeHref(item.href, locale),

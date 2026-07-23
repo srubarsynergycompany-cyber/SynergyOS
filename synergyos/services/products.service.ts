@@ -1,5 +1,4 @@
-import { prisma } from '@/lib/database/prisma';
-import { mockCustomers, mockProducts } from '@/services/mockData';
+import { getSupabaseServer } from '@/lib/supabase-server';
 import type { Product } from '@/types';
 
 type ProductListParams = {
@@ -36,6 +35,36 @@ export type ProductInput = {
   active: boolean;
 };
 
+type ProductRow = {
+  id: string;
+  sku: string;
+  name: string;
+  barcode: string | null;
+  description: string | null;
+  client_id: string | null;
+  category: string | null;
+  weight: number | string | null;
+  width: number | string | null;
+  height: number | string | null;
+  length: number | string | null;
+  minimum_stock: number | null;
+  current_stock: number | null;
+  unit: string | null;
+  price: number | string | null;
+  currency: string | null;
+  active: boolean | null;
+  warehouse_positions: unknown;
+  batches: unknown;
+  expiration_dates: unknown;
+  images: unknown;
+  attachments: unknown;
+  created_at: string;
+  updated_at: string;
+  clients?: {
+    name: string | null;
+  } | null;
+};
+
 export class ProductServiceError extends Error {
   code: ProductServiceErrorCode;
 
@@ -50,77 +79,22 @@ export function isProductServiceError(error: unknown): error is ProductServiceEr
   return error instanceof ProductServiceError;
 }
 
-let mockProductsStore: Product[] = [...mockProducts];
-
-function shouldUseMockDataSource() {
-  return !prisma;
-}
-
-function getDbClient() {
-  if (!prisma) {
-    throw new ProductServiceError('Database client is not available.', 'DATA_ACCESS');
-  }
-
-  return prisma;
-}
-
-function toNumber(value: unknown) {
-  return Number(value ?? 0);
-}
-
-function mapDbProduct(row: {
-  id: string;
-  sku: string;
-  eanBarcode: string;
-  name: string;
-  description: string;
-  customerId: string;
-  customer: { name: string } | null;
-  category: string | null;
-  weight: unknown;
-  width: unknown;
-  height: unknown;
-  length: unknown;
-  minimumStock: number;
-  currentStock: number;
-  unit: string;
-  price: unknown;
-  currency: string;
-  active: boolean;
-  warehousePositions: unknown;
-  batches: unknown;
-  expirationDates: unknown;
-  images: unknown;
-  attachments: unknown;
-  createdAt: Date;
-  updatedAt: Date;
-}): Product {
+function normalizeInput(input: ProductInput): ProductInput {
   return {
-    id: row.id,
-    sku: row.sku,
-    eanBarcode: row.eanBarcode,
-    name: row.name,
-    description: row.description,
-    customerId: row.customerId,
-    customerName: row.customer?.name ?? 'Unknown customer',
-    category: row.category ?? 'Uncategorized',
-    weight: toNumber(row.weight),
-    width: toNumber(row.width),
-    height: toNumber(row.height),
-    length: toNumber(row.length),
-    minimumStock: row.minimumStock,
-    currentStock: row.currentStock,
-    unit: row.unit,
-    price: toNumber(row.price),
-    currency: row.currency,
-    active: row.active,
-    warehousePositions: Array.isArray(row.warehousePositions) ? (row.warehousePositions as string[]) : [],
-    batches: Array.isArray(row.batches) ? (row.batches as string[]) : [],
-    expirationDates: Array.isArray(row.expirationDates) ? (row.expirationDates as string[]) : [],
-    images: Array.isArray(row.images) ? (row.images as string[]) : [],
-    attachments: Array.isArray(row.attachments) ? (row.attachments as string[]) : [],
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    sku: input.sku.trim(),
+    eanBarcode: input.eanBarcode.trim(),
+    name: input.name.trim(),
+    description: input.description.trim(),
+    customerId: input.customerId.trim(),
+    category: input.category.trim(),
+    weight: Number(input.weight),
+    width: Number(input.width),
+    height: Number(input.height),
+    length: Number(input.length),
+    minimumStock: Number(input.minimumStock),
+    currentStock: Number(input.currentStock),
+    unit: input.unit.trim(),
+    active: input.active,
   };
 }
 
@@ -138,7 +112,7 @@ function validateRequired(input: ProductInput) {
   for (const [key, message] of requiredText) {
     const value = input[key];
     if (typeof value !== 'string' || value.trim().length === 0) {
-      throw new Error(message);
+      throw new ProductServiceError(message, 'VALIDATION');
     }
   }
 }
@@ -175,25 +149,6 @@ function validateNumericFields(input: ProductInput) {
   }
 }
 
-function normalizeInput(input: ProductInput): ProductInput {
-  return {
-    sku: input.sku.trim(),
-    eanBarcode: input.eanBarcode.trim(),
-    name: input.name.trim(),
-    description: input.description.trim(),
-    customerId: input.customerId.trim(),
-    category: input.category.trim(),
-    weight: Number(input.weight),
-    width: Number(input.width),
-    height: Number(input.height),
-    length: Number(input.length),
-    minimumStock: Number(input.minimumStock),
-    currentStock: Number(input.currentStock),
-    unit: input.unit.trim(),
-    active: input.active,
-  };
-}
-
 function validateInput(input: ProductInput) {
   validateRequired(input);
   validateNumericFields(input);
@@ -205,160 +160,77 @@ function toKnownServiceError(error: unknown): ProductServiceError {
   }
 
   const candidate = error as { code?: string; message?: string };
-  if (candidate?.code === 'P2002') {
+  if (candidate?.code === '23505') {
     return new ProductServiceError('SKU or EAN barcode must be unique.', 'CONFLICT');
   }
-  if (candidate?.code === 'P2003') {
+  if (candidate?.code === '23503') {
     return new ProductServiceError('Customer reference is invalid.', 'VALIDATION');
-  }
-  if (candidate?.code === 'P2025') {
-    return new ProductServiceError('Product not found.', 'NOT_FOUND');
   }
 
   return new ProductServiceError(candidate?.message ?? 'Unexpected product data error.', 'DATA_ACCESS');
 }
 
-function isDatabaseUnavailableError(error: unknown): boolean {
-  const candidate = error as { code?: string; message?: string };
-  const message = String(candidate?.message ?? '').toLowerCase();
-  const dbUnavailableCodes = new Set(['P1000', 'P1001', 'P1002', 'P1017']);
-
-  if (candidate?.code && dbUnavailableCodes.has(candidate.code)) {
-    return true;
-  }
-
-  return (
-    message.includes('can\'t reach database server')
-    || message.includes('connection refused')
-    || message.includes('econnrefused')
-    || message.includes('database client is not available')
-  );
+function toNumber(value: number | string | null) {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function validateSkuUniqueInMock(sku: string, existingId?: string) {
-  const exists = mockProductsStore.some((product) => product.sku.toLowerCase() === sku.toLowerCase() && product.id !== existingId);
-  if (exists) {
-    throw new Error('SKU must be unique.');
-  }
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
-function validateEanUniqueInMock(eanBarcode: string, existingId?: string) {
-  const exists = mockProductsStore.some((product) => product.eanBarcode.toLowerCase() === eanBarcode.toLowerCase() && product.id !== existingId);
-  if (exists) {
-    throw new ProductServiceError('EAN barcode must be unique.', 'CONFLICT');
-  }
-}
-
-function getMockCustomerName(customerId: string) {
-  const customer = mockCustomers.find((item) => item.id === customerId);
-  return customer?.name ?? 'Unknown customer';
-}
-
-function listPaginatedFromMock(params: ProductListParams = {}): PaginatedProducts {
-  return paginate(applyFilters(mockProductsStore, params), params);
-}
-
-function getByIdFromMock(id: string): Product | null {
-  return mockProductsStore.find((product) => product.id === id) ?? null;
-}
-
-function createInMock(normalizedInput: ProductInput): Product {
-  validateSkuUniqueInMock(normalizedInput.sku);
-  validateEanUniqueInMock(normalizedInput.eanBarcode);
-  const customerName = getMockCustomerName(normalizedInput.customerId);
-
-  const created: Product = {
-    id: `P-${Date.now()}`,
-    sku: normalizedInput.sku,
-    eanBarcode: normalizedInput.eanBarcode,
-    name: normalizedInput.name,
-    description: normalizedInput.description,
-    customerId: normalizedInput.customerId,
-    customerName,
-    category: normalizedInput.category,
-    weight: normalizedInput.weight,
-    width: normalizedInput.width,
-    height: normalizedInput.height,
-    length: normalizedInput.length,
-    minimumStock: normalizedInput.minimumStock,
-    currentStock: normalizedInput.currentStock,
-    unit: normalizedInput.unit,
-    price: 0,
-    currency: 'USD',
-    active: normalizedInput.active,
-    warehousePositions: [],
-    batches: [],
-    expirationDates: [],
-    images: [],
-    attachments: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  mockProductsStore = [created, ...mockProductsStore];
-  return created;
-}
-
-function updateInMock(id: string, normalizedInput: ProductInput): Product {
-  validateSkuUniqueInMock(normalizedInput.sku, id);
-  validateEanUniqueInMock(normalizedInput.eanBarcode, id);
-
-  const existing = mockProductsStore.find((product) => product.id === id);
-  if (!existing) {
-    throw new ProductServiceError('Product not found.', 'NOT_FOUND');
-  }
-
-  const updated: Product = {
-    ...existing,
-    ...normalizedInput,
-    updatedAt: new Date().toISOString(),
-    customerName: getMockCustomerName(normalizedInput.customerId),
-  };
-  mockProductsStore = mockProductsStore.map((product) => (product.id === id ? updated : product));
-  return updated;
-}
-
-function removeInMock(id: string): void {
-  const next = mockProductsStore.filter((product) => product.id !== id);
-  if (next.length === mockProductsStore.length) {
-    throw new ProductServiceError('Product not found.', 'NOT_FOUND');
-  }
-  mockProductsStore = next;
-}
-
-function listCategoriesFromMock(): string[] {
-  const categories = new Set(mockProductsStore.map((product) => product.category).filter(Boolean));
-  return Array.from(categories).sort((a, b) => a.localeCompare(b));
-}
-
-function applyFilters(items: Product[], params: ProductListParams): Product[] {
-  const search = params.search?.trim().toLowerCase();
-
-  return items.filter((product) => {
-    const matchesSearch =
-      !search ||
-      [product.name, product.sku, product.eanBarcode, product.category, product.customerName]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(search));
-    const matchesCategory = !params.category || params.category === 'all' || product.category === params.category;
-    const matchesActive = params.active === undefined || product.active === params.active;
-    return matchesSearch && matchesCategory && matchesActive;
-  });
-}
-
-function paginate(items: Product[], params: ProductListParams): PaginatedProducts {
-  const requestedPage = Math.max(1, params.page ?? 1);
-  const pageSize = Math.max(1, params.pageSize ?? 10);
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const page = Math.min(requestedPage, totalPages);
-  const start = (page - 1) * pageSize;
-
+function mapProductRow(row: ProductRow): Product {
   return {
-    items: items.slice(start, start + pageSize),
-    total: items.length,
-    page,
-    pageSize,
+    id: row.id,
+    sku: row.sku,
+    eanBarcode: row.barcode ?? '',
+    name: row.name,
+    description: row.description ?? '',
+    customerId: row.client_id ?? '',
+    customerName: row.clients?.name ?? 'Unknown customer',
+    category: row.category ?? 'Uncategorized',
+    weight: toNumber(row.weight),
+    width: toNumber(row.width),
+    height: toNumber(row.height),
+    length: toNumber(row.length),
+    minimumStock: row.minimum_stock ?? 0,
+    currentStock: row.current_stock ?? 0,
+    unit: row.unit ?? 'pcs',
+    price: toNumber(row.price),
+    currency: (row.currency ?? 'USD').toUpperCase(),
+    active: row.active ?? true,
+    warehousePositions: toStringArray(row.warehouse_positions),
+    batches: toStringArray(row.batches),
+    expirationDates: toStringArray(row.expiration_dates),
+    images: toStringArray(row.images),
+    attachments: toStringArray(row.attachments),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
+
+function toDbPayload(input: ProductInput) {
+  return {
+    sku: input.sku,
+    barcode: input.eanBarcode,
+    name: input.name,
+    description: input.description,
+    client_id: input.customerId,
+    category: input.category,
+    weight: input.weight,
+    width: input.width,
+    height: input.height,
+    length: input.length,
+    minimum_stock: input.minimumStock,
+    current_stock: input.currentStock,
+    unit: input.unit,
+    active: input.active,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+const PRODUCT_SELECT =
+  'id, sku, name, barcode, description, client_id, category, weight, width, height, length, minimum_stock, current_stock, unit, price, currency, active, warehouse_positions, batches, expiration_dates, images, attachments, created_at, updated_at, clients(name)';
 
 export const productsService = {
   async list(): Promise<Product[]> {
@@ -367,95 +239,64 @@ export const productsService = {
   },
 
   async listPaginated(params: ProductListParams = {}): Promise<PaginatedProducts> {
-    if (shouldUseMockDataSource()) {
-      return listPaginatedFromMock(params);
-    }
-
-    const search = params.search?.trim();
-    const where = {
-      ...(params.category && params.category !== 'all' ? { category: params.category } : {}),
-      ...(params.active === undefined ? {} : { active: params.active }),
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' as const } },
-              { sku: { contains: search, mode: 'insensitive' as const } },
-              { eanBarcode: { contains: search, mode: 'insensitive' as const } },
-              { category: { contains: search, mode: 'insensitive' as const } },
-              { customer: { name: { contains: search, mode: 'insensitive' as const } } },
-            ],
-          }
-        : {}),
-    };
     const requestedPage = Math.max(1, params.page ?? 1);
     const pageSize = Math.max(1, params.pageSize ?? 10);
-    const skip = (requestedPage - 1) * pageSize;
-    const db = getDbClient();
+    const from = (requestedPage - 1) * pageSize;
+    const to = from + pageSize - 1;
+    const search = params.search?.trim();
 
     try {
-      const [rows, total] = await Promise.all([
-        db.product.findMany({
-          where,
-          include: { customer: { select: { name: true } } },
-          orderBy: { name: 'asc' },
-          skip,
-          take: pageSize,
-        }),
-        db.product.count({ where }),
-      ]);
+      let query = getSupabaseServer()
+        .from('products')
+        .select(PRODUCT_SELECT, { count: 'exact' })
+        .order('name', { ascending: true })
+        .range(from, to);
 
-      const totalPages = Math.max(1, Math.ceil(total / pageSize));
-      const page = Math.min(requestedPage, totalPages);
-      if (page === requestedPage || total === 0) {
-        return {
-          items: rows.map(mapDbProduct),
-          total,
-          page,
-          pageSize,
-        };
+      if (params.category && params.category !== 'all') {
+        query = query.eq('category', params.category);
+      }
+      if (params.active !== undefined) {
+        query = query.eq('active', params.active);
+      }
+      if (search) {
+        const pattern = `%${search}%`;
+        query = query.or(`sku.ilike.${pattern},name.ilike.${pattern},barcode.ilike.${pattern},category.ilike.${pattern}`);
       }
 
-      const correctedRows = await db.product.findMany({
-        where,
-        include: { customer: { select: { name: true } } },
-        orderBy: { name: 'asc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      });
+      const { data, error, count } = await query;
+      if (error) {
+        throw error;
+      }
+
+      const total = count ?? 0;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      const page = Math.min(requestedPage, totalPages);
 
       return {
-        items: correctedRows.map(mapDbProduct),
+        items: ((data ?? []) as ProductRow[]).map(mapProductRow),
         total,
         page,
         pageSize,
       };
     } catch (error) {
-      if (isDatabaseUnavailableError(error)) {
-        return listPaginatedFromMock(params);
-      }
-
       throw toKnownServiceError(error);
     }
   },
 
   async getById(id: string): Promise<Product | null> {
-    if (shouldUseMockDataSource()) {
-      return getByIdFromMock(id);
-    }
-
-    const db = getDbClient();
-
     try {
-      const row = await db.product.findUnique({
-        where: { id },
-        include: { customer: { select: { name: true } } },
-      });
-      return row ? mapDbProduct(row) : null;
-    } catch (error) {
-      if (isDatabaseUnavailableError(error)) {
-        return getByIdFromMock(id);
+      const { data, error } = await getSupabaseServer()
+        .from('products')
+        .select(PRODUCT_SELECT)
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
       }
 
+      return data ? mapProductRow(data as ProductRow) : null;
+    } catch (error) {
       throw toKnownServiceError(error);
     }
   },
@@ -464,156 +305,88 @@ export const productsService = {
     const normalizedInput = normalizeInput(input);
     validateInput(normalizedInput);
 
-    if (!shouldUseMockDataSource()) {
-      const db = getDbClient();
+    try {
+      const { data, error } = await getSupabaseServer()
+        .from('products')
+        .insert(toDbPayload(normalizedInput))
+        .select(PRODUCT_SELECT)
+        .single();
 
-      try {
-        const customer = await db.customer.findUnique({
-          where: { id: normalizedInput.customerId },
-          select: { id: true, organizationId: true, name: true },
-        });
-
-        if (!customer) {
-          throw new ProductServiceError('Customer is required.', 'VALIDATION');
-        }
-
-        const row = await db.product.create({
-          data: {
-            organizationId: customer.organizationId,
-            sku: normalizedInput.sku,
-            eanBarcode: normalizedInput.eanBarcode,
-            name: normalizedInput.name,
-            description: normalizedInput.description,
-            customerId: normalizedInput.customerId,
-            category: normalizedInput.category,
-            weight: normalizedInput.weight,
-            width: normalizedInput.width,
-            height: normalizedInput.height,
-            length: normalizedInput.length,
-            minimumStock: normalizedInput.minimumStock,
-            currentStock: normalizedInput.currentStock,
-            unit: normalizedInput.unit,
-            active: normalizedInput.active,
-            price: 0,
-            currency: 'USD',
-            warehousePositions: [],
-            batches: [],
-            expirationDates: [],
-            images: [],
-            attachments: [],
-          },
-          include: { customer: { select: { name: true } } },
-        });
-        return mapDbProduct(row);
-      } catch (error) {
-        if (isDatabaseUnavailableError(error)) {
-          return createInMock(normalizedInput);
-        }
-
-        throw toKnownServiceError(error);
+      if (error) {
+        throw error;
       }
-    }
 
-    return createInMock(normalizedInput);
+      return mapProductRow(data as ProductRow);
+    } catch (error) {
+      throw toKnownServiceError(error);
+    }
   },
 
   async update(id: string, input: ProductInput): Promise<Product> {
     const normalizedInput = normalizeInput(input);
     validateInput(normalizedInput);
 
-    if (!shouldUseMockDataSource()) {
-      const db = getDbClient();
-
-      try {
-        const customer = await db.customer.findUnique({
-          where: { id: normalizedInput.customerId },
-          select: { id: true, organizationId: true },
-        });
-
-        if (!customer) {
-          throw new ProductServiceError('Customer is required.', 'VALIDATION');
-        }
-
-        const row = await db.product.update({
-          where: { id },
-          data: {
-            organizationId: customer.organizationId,
-            sku: normalizedInput.sku,
-            eanBarcode: normalizedInput.eanBarcode,
-            name: normalizedInput.name,
-            description: normalizedInput.description,
-            customerId: normalizedInput.customerId,
-            category: normalizedInput.category,
-            weight: normalizedInput.weight,
-            width: normalizedInput.width,
-            height: normalizedInput.height,
-            length: normalizedInput.length,
-            minimumStock: normalizedInput.minimumStock,
-            currentStock: normalizedInput.currentStock,
-            unit: normalizedInput.unit,
-            active: normalizedInput.active,
-          },
-          include: { customer: { select: { name: true } } },
-        });
-        return mapDbProduct(row);
-      } catch (error) {
-        if (isDatabaseUnavailableError(error)) {
-          return updateInMock(id, normalizedInput);
-        }
-
-        throw toKnownServiceError(error);
-      }
-    }
-
-    return updateInMock(id, normalizedInput);
-  },
-
-  async remove(id: string): Promise<void> {
-    if (!shouldUseMockDataSource()) {
-      const db = getDbClient();
-
-      try {
-        await db.product.delete({ where: { id } });
-        return;
-      } catch (error) {
-        if (isDatabaseUnavailableError(error)) {
-          removeInMock(id);
-          return;
-        }
-
-        throw toKnownServiceError(error);
-      }
-    }
-
-    removeInMock(id);
-  },
-
-  async listCategories(): Promise<string[]> {
-    if (shouldUseMockDataSource()) {
-      return listCategoriesFromMock();
-    }
-
-    const db = getDbClient();
-
     try {
-      const rows = await db.product.findMany({
-        select: { category: true },
-        distinct: ['category'],
-      });
-      return rows
-        .map((row) => row.category)
-        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-        .sort((a, b) => a.localeCompare(b));
-    } catch (error) {
-      if (isDatabaseUnavailableError(error)) {
-        return listCategoriesFromMock();
+      const { data, error } = await getSupabaseServer()
+        .from('products')
+        .update(toDbPayload(normalizedInput))
+        .eq('id', id)
+        .select(PRODUCT_SELECT)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+      if (!data) {
+        throw new ProductServiceError('Product not found.', 'NOT_FOUND');
       }
 
+      return mapProductRow(data as ProductRow);
+    } catch (error) {
       throw toKnownServiceError(error);
     }
   },
 
-  resetMockStoreForTests(): void {
-    mockProductsStore = [...mockProducts];
+  async remove(id: string): Promise<void> {
+    try {
+      const { data, error } = await getSupabaseServer()
+        .from('products')
+        .delete()
+        .eq('id', id)
+        .select('id')
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+      if (!data) {
+        throw new ProductServiceError('Product not found.', 'NOT_FOUND');
+      }
+    } catch (error) {
+      throw toKnownServiceError(error);
+    }
+  },
+
+  async listCategories(): Promise<string[]> {
+    try {
+      const { data, error } = await getSupabaseServer()
+        .from('products')
+        .select('category')
+        .not('category', 'is', null);
+
+      if (error) {
+        throw error;
+      }
+
+      const categories = new Set(
+        (data ?? [])
+          .map((row) => row.category)
+          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
+      );
+
+      return Array.from(categories).sort((a, b) => a.localeCompare(b));
+    } catch (error) {
+      throw toKnownServiceError(error);
+    }
   },
 };

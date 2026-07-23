@@ -1,21 +1,12 @@
 import { notFound } from "next/navigation";
 import { getDictionary, locales } from "@/lib/i18n/dictionaries";
 import type { Locale } from "@/lib/i18n/types";
-import { mockOrders } from "@/lib/orders/mockData";
 import { OrderDetailView } from "@/components/orders/OrderDetailView";
+import { ordersService } from "@/services/orders.service";
 
 type PageProps = {
   params: Promise<{ locale: string; orderId: string }>;
 };
-
-export function generateStaticParams() {
-  return locales.flatMap((locale) =>
-    mockOrders.flatMap((order) => [
-      { locale, orderId: order.id },
-      { locale, orderId: order.orderNumber },
-    ])
-  );
-}
 
 export default async function OrderDetailPage({ params }: PageProps) {
   const { locale, orderId } = await params;
@@ -25,10 +16,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const normalizedOrderId = orderId.toLowerCase();
-  const order = mockOrders.find(
-    (item) => item.id.toLowerCase() === normalizedOrderId || item.orderNumber.toLowerCase() === normalizedOrderId
-  );
+  const order = await ordersService.getById(orderId);
 
   if (!order) {
     notFound();
@@ -38,3 +26,5 @@ export default async function OrderDetailPage({ params }: PageProps) {
 
   return <OrderDetailView initialOrder={order} locale={safeLocale} dictionary={dictionary} />;
 }
+
+export const dynamic = "force-dynamic";

@@ -7,31 +7,31 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 export default function SettingsPage() {
   return (
     <Card
-      title="Settings"
-      subtitle="Global defaults for operations, notifications, and profile preferences."
-      action={<StatusBadge label="Configuration" tone="amber" />}
+      title="Nastavení"
+      subtitle="Globální výchozí hodnoty pro provoz, upozornění a profil."
+      action={<StatusBadge label="Konfigurace" tone="amber" />}
     >
-      <Form title="Workspace profile" description="Example form primitives from the global design system.">
+      <Form title="Profil workspace" description="Ukázka formulářových prvků z globálního design systému.">
         <FormRow columns={2}>
-          <FormField label="Workspace name">
+          <FormField label="Název workspace">
             <Input placeholder="Synergy Fulfillment" />
           </FormField>
-          <FormField label="Default locale">
-            <Input placeholder="en-US" />
+          <FormField label="Výchozí jazyk">
+            <Input placeholder="cs-CZ" />
           </FormField>
         </FormRow>
         <FormRow columns={2}>
-          <FormField label="Operations email" hint="Used for system alerts and escalations.">
+          <FormField label="Provozní email" hint="Používá se pro systémová upozornění a eskalace.">
             <Input type="email" placeholder="ops@synergyos.com" />
           </FormField>
-          <FormField label="Daily cut-off time">
+          <FormField label="Denní uzávěrka">
             <Input type="time" defaultValue="16:00" />
           </FormField>
         </FormRow>
         <div className="flex gap-3">
-          <Button type="button">Save changes</Button>
+          <Button type="button">Uložit změny</Button>
           <Button type="button" variant="ghost">
-            Cancel
+            Zrušit
           </Button>
         </div>
       </Form>

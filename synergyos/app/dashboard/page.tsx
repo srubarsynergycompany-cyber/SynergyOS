@@ -7,18 +7,18 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <Card title="Operations overview" subtitle="Shared architecture foundation" action={<StatusBadge label="Live mock layer" tone="cyan" />}>
+      <Card title="Provozní přehled" subtitle="Sdílený architektonický základ" action={<StatusBadge label="Živá data ze Supabase" tone="cyan" />}>
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <p className="text-sm text-slate-400">Orders</p>
+            <p className="text-sm text-slate-400">Objednávky</p>
             <p className="mt-2 text-2xl font-semibold text-white">{orders.length}</p>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <p className="text-sm text-slate-400">Customers</p>
+            <p className="text-sm text-slate-400">Zákazníci</p>
             <p className="mt-2 text-2xl font-semibold text-white">{customers.length}</p>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <p className="text-sm text-slate-400">Inventory items</p>
+            <p className="text-sm text-slate-400">Skladové položky</p>
             <p className="mt-2 text-2xl font-semibold text-white">{inventory.length}</p>
           </div>
         </div>
@@ -26,3 +26,5 @@ export default async function DashboardPage() {
     </div>
   );
 }
+
+export const dynamic = 'force-dynamic';

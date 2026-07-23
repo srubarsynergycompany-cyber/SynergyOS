@@ -2,12 +2,18 @@ alter table if exists orders
   add column if not exists total_amount numeric(12,2),
   add column if not exists currency char(3) default 'CZK',
   add column if not exists payment_status text,
+  add column if not exists customer_name text,
+  add column if not exists customer_email text,
+  add column if not exists customer_phone text,
+  add column if not exists customer_company text,
   add column if not exists shipping_address text,
   add column if not exists billing_address text,
   add column if not exists tracking_number text,
   add column if not exists shipped_at timestamptz,
   add column if not exists notes text,
   add column if not exists sales_channel text,
+  add column if not exists warehouse_slot text,
+  add column if not exists promise_date date,
   add column if not exists status_history jsonb default '[]'::jsonb;
 
 alter table if exists order_items

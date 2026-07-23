@@ -15,13 +15,10 @@ type OrdersModuleProps = {
 const PAGE_SIZE = 5;
 const statusOrder: OrderStatus[] = ["new", "picking", "packed", "shipped", "delivered"];
 
-type ApiOrderListItem = {
+type ApiOrderListItem = Partial<Order> & {
   id: string;
   orderNumber: string;
   customerId?: string;
-  status?: string;
-  createdAt?: string;
-  priority?: string;
   totalAmount?: number;
   currency?: string;
 };
@@ -43,32 +40,38 @@ function parsePriority(priority: string | undefined): Order["priority"] {
 
 function mapApiOrderToViewModel(item: ApiOrderListItem): Order {
   const nowIso = new Date().toISOString();
-  const customerLabel = item.customerId?.trim() ? item.customerId : "Unknown customer";
+  const customerLabel = item.customer?.trim() || item.customerId?.trim() || "Unknown customer";
+  const createdAt = item.createdAt ?? nowIso;
 
   return {
     id: item.id,
     orderNumber: item.orderNumber,
     customer: customerLabel,
-    company: customerLabel,
-    phone: "",
-    email: "",
-    shop: "SynergyOS",
+    company: item.company ?? customerLabel,
+    phone: item.phone ?? "",
+    email: item.email ?? "",
+    shop: item.shop ?? item.salesChannel ?? "SynergyOS",
     status: parseOrderStatus(item.status),
-    carrier: "-",
-    createdAt: item.createdAt ?? nowIso,
-    updatedAt: item.createdAt ?? nowIso,
-    items: 0,
-    total: typeof item.totalAmount === "number" ? `${item.totalAmount.toFixed(2)} ${item.currency ?? "USD"}` : "$0.00",
-    address: "",
-    shippingAddress: "",
-    billingAddress: "",
+    carrier: item.carrier ?? "-",
+    createdAt,
+    updatedAt: item.updatedAt ?? createdAt,
+    items: item.items ?? item.products?.reduce((total, product) => total + product.quantity, 0) ?? 0,
+    total: item.total ?? (typeof item.totalAmount === "number" ? `${item.totalAmount.toFixed(2)} ${item.currency ?? "USD"}` : "$0.00"),
+    address: item.address ?? item.shippingAddress ?? "",
+    shippingAddress: item.shippingAddress ?? "",
+    billingAddress: item.billingAddress ?? "",
     priority: parsePriority(item.priority),
-    notes: "",
-    warehouseSlot: "TBD",
-    promiseDate: (item.createdAt ?? nowIso).split("T")[0],
-    salesChannel: "Shopify",
-    paymentStatus: "Pending",
-    products: [],
+    trackingNumber: item.trackingNumber,
+    notes: item.notes ?? "",
+    warehouseSlot: item.warehouseSlot ?? "TBD",
+    promiseDate: item.promiseDate ?? createdAt.split("T")[0],
+    salesChannel: item.salesChannel ?? "Shopify",
+    paymentStatus: item.paymentStatus ?? "Pending",
+    pickerName: item.pickerName,
+    pickedAt: item.pickedAt,
+    packedAt: item.packedAt,
+    shippedAt: item.shippedAt,
+    products: item.products ?? [],
   };
 }
 

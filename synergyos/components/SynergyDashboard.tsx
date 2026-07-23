@@ -60,17 +60,17 @@ export default function SynergyDashboard({ dictionary, locale }: SynergyDashboar
   ];
 
   const carriers = [
-    { name: "PPL", value: "72%", count: "1,120 parcels", color: "from-cyan-500 to-blue-600" },
-    { name: "DPD", value: "64%", count: "980 parcels", color: "from-violet-500 to-fuchsia-600" },
-    { name: "Zásilkovna", value: "58%", count: "860 parcels", color: "from-emerald-500 to-teal-600" },
-    { name: "Balíkovna", value: "41%", count: "640 parcels", color: "from-amber-500 to-orange-600" },
+    { name: "PPL", value: "72%", count: locale === "en" ? "1,120 parcels" : "1 120 zásilek", color: "from-cyan-500 to-blue-600" },
+    { name: "DPD", value: "64%", count: locale === "en" ? "980 parcels" : "980 zásilek", color: "from-violet-500 to-fuchsia-600" },
+    { name: "Zásilkovna", value: "58%", count: locale === "en" ? "860 parcels" : "860 zásilek", color: "from-emerald-500 to-teal-600" },
+    { name: "Balíkovna", value: "41%", count: locale === "en" ? "640 parcels" : "640 zásilek", color: "from-amber-500 to-orange-600" },
   ];
 
   const customers = [
-    { name: "Northstar Studio", revenue: "$24.8k", orders: 184, tier: "Platinum" },
-    { name: "Lumen Lab", revenue: "$18.2k", orders: 142, tier: "Gold" },
-    { name: "Aero Goods", revenue: "$14.6k", orders: 121, tier: "Gold" },
-    { name: "Mosaic House", revenue: "$12.1k", orders: 97, tier: "Silver" },
+    { name: "Northstar Studio", revenue: "$24.8k", orders: 184, tier: locale === "en" ? "Platinum" : "Platina" },
+    { name: "Lumen Lab", revenue: "$18.2k", orders: 142, tier: locale === "en" ? "Gold" : "Zlato" },
+    { name: "Aero Goods", revenue: "$14.6k", orders: 121, tier: locale === "en" ? "Gold" : "Zlato" },
+    { name: "Mosaic House", revenue: "$12.1k", orders: 97, tier: locale === "en" ? "Silver" : "Stříbro" },
   ];
 
   const recentOrders = [
@@ -80,11 +80,18 @@ export default function SynergyDashboard({ dictionary, locale }: SynergyDashboar
     { id: "ORD-1045", customer: "Aero Goods", carrier: "Balíkovna", statusKey: "queued", time: "07:41" },
   ];
 
-  const notifications = [
-    { title: "Inventory alert", text: "4 SKUs below reorder point", time: "12 min ago" },
-    { title: "Carrier delay", text: "DPD hub congestion in Prague", time: "34 min ago" },
-    { title: "New return", text: "One order requires quality review", time: "1h ago" },
-  ];
+  const notifications =
+    locale === "en"
+      ? [
+          { title: "Inventory alert", text: "4 SKUs below reorder point", time: "12 min ago" },
+          { title: "Carrier delay", text: "DPD hub congestion in Prague", time: "34 min ago" },
+          { title: "New return", text: "One order requires quality review", time: "1h ago" },
+        ]
+      : [
+          { title: "Skladové upozornění", text: "4 SKU jsou pod bodem doobjednání", time: "před 12 min" },
+          { title: "Zpoždění dopravce", text: "Přetížení DPD depa v Praze", time: "před 34 min" },
+          { title: "Nová vratka", text: "Jedna objednávka vyžaduje kontrolu kvality", time: "před 1 h" },
+        ];
 
   const sections = [
     dictionary.navigation.sections.dashboard,

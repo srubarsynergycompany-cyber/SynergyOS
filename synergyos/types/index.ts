@@ -84,3 +84,26 @@ export interface InventoryItem {
   minimumStock: number;
   status: string;
 }
+
+export interface InventoryMovementItem {
+  id: string;
+  requestId: string;
+  inventoryId: string | null;
+  productId: string | null;
+  sku: string;
+  productName: string;
+  locationCode: string;
+  delta: number;
+  quantityBefore: number;
+  quantityAfter: number;
+  reason: string;
+  actorLabel: string | null;
+  createdAt: string;
+}
+
+export interface InventoryMovementsResponse {
+  items: InventoryMovementItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

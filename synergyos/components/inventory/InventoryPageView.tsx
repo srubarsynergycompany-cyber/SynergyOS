@@ -5,6 +5,10 @@ import {
   InventoryAdjustmentDialog,
   type InventoryAdjustmentCopy,
 } from "@/components/inventory/InventoryAdjustmentDialog";
+import {
+  InventoryMovementsDialog,
+  type InventoryMovementsCopy,
+} from "@/components/inventory/InventoryMovementsDialog";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { InventoryToolbar } from "@/components/inventory/InventoryToolbar";
 import type { InventoryItem } from "@/types";
@@ -50,6 +54,7 @@ type InventoryPageCopy = {
   adjustment: InventoryAdjustmentCopy & {
     success: string;
   };
+  movements: InventoryMovementsCopy;
 };
 
 const defaultCopy: InventoryPageCopy = {
@@ -118,6 +123,51 @@ const defaultCopy: InventoryPageCopy = {
       requestFailed: 'Úpravu zásoby se nepodařilo uložit.',
     },
   },
+  movements: {
+    title: 'Historie zásob',
+    description: 'Prohlédněte si auditní historii ručních změn zásoby.',
+    close: 'Zavřít',
+    loading: 'Načítám historii zásob…',
+    refreshing: 'Aktualizuji historii…',
+    retry: 'Zkusit znovu',
+    loadFailed: 'Historii zásob se nepodařilo načíst.',
+    emptyTitle: 'Žádné pohyby',
+    emptyDescription: 'Pro zvolené filtry nebyly nalezeny žádné pohyby zásob.',
+    unknownActor: 'Neznámý uživatel',
+    deletedProduct: 'Odstraněný produkt',
+    filters: {
+      sku: 'SKU',
+      skuPlaceholder: 'Hledat podle SKU',
+      product: 'Produkt',
+      productPlaceholder: 'Hledat podle názvu',
+      location: 'Lokace',
+      locationPlaceholder: 'Hledat podle lokace',
+      from: 'Datum od',
+      to: 'Datum do',
+      apply: 'Použít filtry',
+      clear: 'Vymazat filtry',
+      invalidRange: 'Datum od nesmí být později než datum do.',
+    },
+    table: {
+      createdAt: 'Datum a čas',
+      sku: 'SKU',
+      product: 'Produkt',
+      location: 'Lokace',
+      quantityBefore: 'Před',
+      delta: 'Změna',
+      quantityAfter: 'Po',
+      reason: 'Důvod',
+      actor: 'Provedl',
+    },
+    pagination: {
+      previous: 'Předchozí',
+      next: 'Další',
+      page: 'Strana',
+      of: 'z',
+      results: 'výsledků',
+    },
+    dateLocale: 'cs-CZ',
+  },
 };
 
 async function fetchInventory(signal?: AbortSignal): Promise<InventoryItem[]> {
@@ -148,6 +198,7 @@ export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPage
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
+  const [isMovementsOpen, setIsMovementsOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadInventory = useCallback(async (signal?: AbortSignal) => {
@@ -250,7 +301,10 @@ export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPage
             { label: copy.toolbar.stockIn },
             { label: copy.toolbar.stockOut },
             { label: copy.toolbar.transfer },
-            { label: copy.toolbar.history },
+            {
+              label: copy.toolbar.history,
+              onClick: () => setIsMovementsOpen(true),
+            },
           ]} />
         </div>
 
@@ -329,6 +383,12 @@ export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPage
           copy={copy.adjustment}
           onClose={() => setIsAdjustmentOpen(false)}
           onSuccess={handleAdjustmentSuccess}
+        />
+      ) : null}
+      {isMovementsOpen ? (
+        <InventoryMovementsDialog
+          copy={copy.movements}
+          onClose={() => setIsMovementsOpen(false)}
         />
       ) : null}
     </main>

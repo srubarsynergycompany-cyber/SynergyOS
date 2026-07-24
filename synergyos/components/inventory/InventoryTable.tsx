@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { InventoryStatusBadge } from "@/components/inventory/InventoryStatusBadge";
-import type { InventoryItem } from "@/lib/inventory/mockData";
+import type { InventoryItem } from "@/types";
 
 type InventoryTableProps = {
   items: InventoryItem[];
@@ -60,17 +60,17 @@ export function InventoryTable({ items, labels }: InventoryTableProps) {
           </thead>
           <tbody className="divide-y divide-slate-800">
             {items.map((item) => (
-              <tr key={item.sku} className="transition hover:bg-slate-800/70">
+              <tr key={item.id} className="transition hover:bg-slate-800/70">
                 <td className="px-4 py-4">
                   <Link href={`/inventory/${item.sku}`} className="block">
-                    <div className="font-semibold text-white">{item.name}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.sku} · {item.barcode}</div>
+                    <div className="font-semibold text-white">{item.productName}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.sku}</div>
                   </Link>
                 </td>
-                <td className="px-4 py-4">{item.warehouseLocation}</td>
-                <td className="px-4 py-4">{item.currentStock}</td>
-                <td className="px-4 py-4">{item.reservedStock}</td>
-                <td className="px-4 py-4">{item.availableStock}</td>
+                <td className="px-4 py-4">{item.locationCode}</td>
+                <td className="px-4 py-4">{item.quantity}</td>
+                <td className="px-4 py-4">{item.reserved}</td>
+                <td className="px-4 py-4">{item.available}</td>
                 <td className="px-4 py-4">{item.minimumStock}</td>
                 <td className="px-4 py-4">
                   <InventoryStatusBadge status={item.status} labels={effectiveLabels.statuses} />

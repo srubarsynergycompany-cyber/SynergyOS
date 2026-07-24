@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { InventoryToolbar } from "@/components/inventory/InventoryToolbar";
-import { mockInventoryItems } from "@/lib/inventory/mockData";
+import type { InventoryItem } from "@/types";
 
 type InventoryPageCopy = {
   eyebrow: string;
@@ -83,20 +83,97 @@ const defaultCopy: InventoryPageCopy = {
   },
 };
 
+async function fetchInventory(signal?: AbortSignal): Promise<InventoryItem[]> {
+  const response = await fetch("/api/inventory", { signal });
+  const payload = (await response.json().catch(() => null)) as {
+    items?: InventoryItem[];
+    message?: string;
+  } | null;
+
+  if (!response.ok) {
+    throw new Error(payload?.message ?? "Inventář se nepodařilo načíst.");
+  }
+  if (!Array.isArray(payload?.items)) {
+    throw new Error("Server vrátil neplatná data inventáře.");
+  }
+
+  return payload.items;
+}
+
+function getLoadErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Inventář se nepodařilo načíst.";
+}
+
 export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPageCopy }) {
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [search, setSearch] = useState("");
   const [barcodeSearch, setBarcodeSearch] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadInventory = useCallback(async (signal?: AbortSignal) => {
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      setItems(await fetchInventory(signal));
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      setLoadError(getLoadErrorMessage(error));
+    } finally {
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetchInventory(controller.signal)
+      .then((loadedItems) => {
+        setItems(loadedItems);
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setLoadError(getLoadErrorMessage(error));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
 
   const filteredItems = useMemo(() => {
     const query = search.toLowerCase().trim();
     const barcodeQuery = barcodeSearch.toLowerCase().trim();
 
-    return mockInventoryItems.filter((item) => {
-      const matchesSearch = !query || [item.name, item.sku, item.category, item.warehouseLocation].some((value) => value.toLowerCase().includes(query));
-      const matchesBarcode = !barcodeQuery || item.barcode.toLowerCase().includes(barcodeQuery);
+    return items.filter((item) => {
+      const matchesSearch = !query || [item.productName, item.sku, item.locationCode, item.status].some((value) => value.toLowerCase().includes(query));
+      const matchesBarcode = !barcodeQuery || item.sku.toLowerCase().includes(barcodeQuery);
       return matchesSearch && matchesBarcode;
     });
-  }, [barcodeSearch, search]);
+  }, [barcodeSearch, items, search]);
+
+  const warehouseLocations = useMemo(
+    () => new Set(items.map((item) => item.locationCode)).size,
+    [items],
+  );
+  const lowStockItems = useMemo(
+    () => items.filter((item) => item.status === "Low stock" || item.status === "Critical").length,
+    [items],
+  );
+  const reservedToday = useMemo(
+    () => items.reduce((total, item) => total + item.reserved, 0),
+    [items],
+  );
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.16),_transparent_28%),linear-gradient(135deg,_#020617,_#0f172a)] text-slate-100">
@@ -140,19 +217,43 @@ export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPage
         <div className="mb-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/40">
             <p className="text-sm text-slate-400">{copy.stats.warehouseLocations}</p>
-            <p className="mt-2 text-3xl font-semibold text-white">4</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{warehouseLocations}</p>
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/40">
             <p className="text-sm text-slate-400">{copy.stats.lowStockItems}</p>
-            <p className="mt-2 text-3xl font-semibold text-white">2</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{lowStockItems}</p>
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/40">
             <p className="text-sm text-slate-400">{copy.stats.reservedToday}</p>
-            <p className="mt-2 text-3xl font-semibold text-white">39</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{reservedToday}</p>
           </div>
         </div>
 
-        <InventoryTable items={filteredItems} labels={{ headers: copy.table, statuses: copy.statuses }} />
+        {isLoading && items.length === 0 ? (
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-8 text-center text-slate-300">
+            Načítám inventář…
+          </div>
+        ) : (
+          <>
+            {loadError && (
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200 sm:flex-row sm:items-center sm:justify-between">
+                <span>{loadError}</span>
+                <button
+                  type="button"
+                  onClick={() => void loadInventory()}
+                  disabled={isLoading}
+                  className="rounded-xl border border-rose-400/40 px-4 py-2 font-medium transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isLoading ? "Načítám…" : "Zkusit znovu"}
+                </button>
+              </div>
+            )}
+            {isLoading && (
+              <p className="mb-3 text-sm text-cyan-300">Aktualizuji inventář…</p>
+            )}
+            <InventoryTable items={filteredItems} labels={{ headers: copy.table, statuses: copy.statuses }} />
+          </>
+        )}
       </div>
     </main>
   );

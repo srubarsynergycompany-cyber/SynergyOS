@@ -580,7 +580,16 @@ export default function ProductsModule({ dictionary, locale, customers }: Produc
             </label>
             <label className="block text-sm text-slate-300">
               <span className="mb-2 block">{copy.form.currentStock}</span>
-              <input type="number" value={formValues.currentStock} onChange={(event) => setFormValues((state) => ({ ...state, currentStock: event.target.value }))} className="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-white outline-none focus:border-cyan-400" />
+              <input
+                type="number"
+                value={formValues.currentStock}
+                readOnly
+                aria-describedby="product-current-stock-help"
+                className="w-full cursor-not-allowed rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-slate-400 outline-none"
+              />
+              <span id="product-current-stock-help" className="mt-2 block text-xs text-slate-500">
+                Fyzická zásoba se spravuje ve skladu.
+              </span>
             </label>
             <label className="block text-sm text-slate-300">
               <span className="mb-2 block">{copy.form.unit}</span>

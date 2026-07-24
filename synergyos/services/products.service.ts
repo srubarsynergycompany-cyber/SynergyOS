@@ -48,7 +48,6 @@ type ProductRow = {
   height: number | string | null;
   length: number | string | null;
   minimum_stock: number | null;
-  current_stock: number | null;
   unit: string | null;
   price: number | string | null;
   currency: string | null;
@@ -63,6 +62,11 @@ type ProductRow = {
   clients?: {
     name: string | null;
   } | null;
+};
+
+type InventoryRow = {
+  product_id: string;
+  quantity: number | null;
 };
 
 export class ProductServiceError extends Error {
@@ -179,7 +183,7 @@ function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
-function mapProductRow(row: ProductRow): Product {
+function mapProductRow(row: ProductRow, currentStock: number): Product {
   return {
     id: row.id,
     sku: row.sku,
@@ -194,7 +198,7 @@ function mapProductRow(row: ProductRow): Product {
     height: toNumber(row.height),
     length: toNumber(row.length),
     minimumStock: row.minimum_stock ?? 0,
-    currentStock: row.current_stock ?? 0,
+    currentStock,
     unit: row.unit ?? 'pcs',
     price: toNumber(row.price),
     currency: (row.currency ?? 'USD').toUpperCase(),
@@ -207,6 +211,38 @@ function mapProductRow(row: ProductRow): Product {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+async function loadInventoryTotals(productIds: string[]): Promise<Map<string, number>> {
+  if (productIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await getSupabaseServer()
+    .from('inventory')
+    .select('product_id, quantity')
+    .in('product_id', productIds);
+
+  if (error) {
+    throw new ProductServiceError(error.message, 'DATA_ACCESS');
+  }
+
+  const totals = new Map<string, number>();
+  for (const row of (data ?? []) as InventoryRow[]) {
+    totals.set(row.product_id, (totals.get(row.product_id) ?? 0) + (row.quantity ?? 0));
+  }
+
+  return totals;
+}
+
+async function mapProductRows(rows: ProductRow[]): Promise<Product[]> {
+  const inventoryTotals = await loadInventoryTotals(rows.map((row) => row.id));
+  return rows.map((row) => mapProductRow(row, inventoryTotals.get(row.id) ?? 0));
+}
+
+async function mapProductRowWithInventory(row: ProductRow): Promise<Product> {
+  const inventoryTotals = await loadInventoryTotals([row.id]);
+  return mapProductRow(row, inventoryTotals.get(row.id) ?? 0);
 }
 
 function toDbPayload(input: ProductInput) {
@@ -222,7 +258,6 @@ function toDbPayload(input: ProductInput) {
     height: input.height,
     length: input.length,
     minimum_stock: input.minimumStock,
-    current_stock: input.currentStock,
     unit: input.unit,
     active: input.active,
     updated_at: new Date().toISOString(),
@@ -230,7 +265,7 @@ function toDbPayload(input: ProductInput) {
 }
 
 const PRODUCT_SELECT =
-  'id, sku, name, barcode, description, client_id, category, weight, width, height, length, minimum_stock, current_stock, unit, price, currency, active, warehouse_positions, batches, expiration_dates, images, attachments, created_at, updated_at, clients(name)';
+  'id, sku, name, barcode, description, client_id, category, weight, width, height, length, minimum_stock, unit, price, currency, active, warehouse_positions, batches, expiration_dates, images, attachments, created_at, updated_at, clients(name)';
 
 export const productsService = {
   async list(): Promise<Product[]> {
@@ -271,9 +306,10 @@ export const productsService = {
       const total = count ?? 0;
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
       const page = Math.min(requestedPage, totalPages);
+      const rows = (data ?? []) as ProductRow[];
 
       return {
-        items: ((data ?? []) as ProductRow[]).map(mapProductRow),
+        items: await mapProductRows(rows),
         total,
         page,
         pageSize,
@@ -295,7 +331,11 @@ export const productsService = {
         throw error;
       }
 
-      return data ? mapProductRow(data as ProductRow) : null;
+      if (!data) {
+        return null;
+      }
+
+      return mapProductRowWithInventory(data as ProductRow);
     } catch (error) {
       throw toKnownServiceError(error);
     }
@@ -316,7 +356,7 @@ export const productsService = {
         throw error;
       }
 
-      return mapProductRow(data as ProductRow);
+      return mapProductRowWithInventory(data as ProductRow);
     } catch (error) {
       throw toKnownServiceError(error);
     }
@@ -341,7 +381,7 @@ export const productsService = {
         throw new ProductServiceError('Product not found.', 'NOT_FOUND');
       }
 
-      return mapProductRow(data as ProductRow);
+      return mapProductRowWithInventory(data as ProductRow);
     } catch (error) {
       throw toKnownServiceError(error);
     }

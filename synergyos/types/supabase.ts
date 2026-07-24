@@ -291,9 +291,6 @@ export type Database = {
           id: string;
           product_id: string;
           quantity: number;
-          reserved: number;
-          minimum_stock: number;
-          status: string;
           location: string | null;
           created_at: string;
           updated_at: string;
@@ -302,9 +299,6 @@ export type Database = {
           id?: string;
           product_id: string;
           quantity?: number;
-          reserved?: number;
-          minimum_stock?: number;
-          status?: string;
           location?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -313,9 +307,6 @@ export type Database = {
           id?: string;
           product_id?: string;
           quantity?: number;
-          reserved?: number;
-          minimum_stock?: number;
-          status?: string;
           location?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -330,12 +321,93 @@ export type Database = {
           },
         ];
       };
+      inventory_movements: {
+        Row: {
+          id: string;
+          request_id: string;
+          inventory_id: string | null;
+          product_id: string | null;
+          sku: string;
+          location: string;
+          delta: number;
+          quantity_before: number;
+          quantity_after: number;
+          reason: string;
+          actor_label: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          inventory_id?: string | null;
+          product_id?: string | null;
+          sku: string;
+          location: string;
+          delta: number;
+          quantity_before: number;
+          quantity_after: number;
+          reason: string;
+          actor_label?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          request_id?: string;
+          inventory_id?: string | null;
+          product_id?: string | null;
+          sku?: string;
+          location?: string;
+          delta?: number;
+          quantity_before?: number;
+          quantity_after?: number;
+          reason?: string;
+          actor_label?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'inventory_movements_inventory_id_fkey';
+            columns: ['inventory_id'];
+            isOneToOne: false;
+            referencedRelation: 'inventory';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'inventory_movements_product_id_fkey';
+            columns: ['product_id'];
+            isOneToOne: false;
+            referencedRelation: 'products';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      adjust_inventory: {
+        Args: {
+          p_inventory_id: string;
+          p_delta: number;
+          p_reason: string;
+          p_request_id: string;
+          p_actor_label?: string | null;
+        };
+        Returns: {
+          movement_id: string;
+          inventory_id: string;
+          product_id: string | null;
+          sku: string;
+          location: string;
+          delta: number;
+          quantity_before: number;
+          quantity_after: number;
+          reason: string;
+          actor_label: string | null;
+          created_at: string;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;

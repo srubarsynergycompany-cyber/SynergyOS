@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  InventoryAdjustmentDialog,
+  type InventoryAdjustmentCopy,
+} from "@/components/inventory/InventoryAdjustmentDialog";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { InventoryToolbar } from "@/components/inventory/InventoryToolbar";
 import type { InventoryItem } from "@/types";
@@ -15,6 +19,7 @@ type InventoryPageCopy = {
     stockOut: string;
     transfer: string;
     history: string;
+    adjustStock: string;
   };
   filters: {
     searchLabel: string;
@@ -42,6 +47,9 @@ type InventoryPageCopy = {
     critical: string;
     reserved: string;
   };
+  adjustment: InventoryAdjustmentCopy & {
+    success: string;
+  };
 };
 
 const defaultCopy: InventoryPageCopy = {
@@ -54,6 +62,7 @@ const defaultCopy: InventoryPageCopy = {
     stockOut: 'Výdej',
     transfer: 'Přesun',
     history: 'Historie zásob',
+    adjustStock: 'Upravit zásobu',
   },
   filters: {
     searchLabel: 'Vyhledat ve skladu',
@@ -80,6 +89,34 @@ const defaultCopy: InventoryPageCopy = {
     lowStock: 'Nízká zásoba',
     critical: 'Kritické',
     reserved: 'Rezervováno',
+  },
+  adjustment: {
+    title: 'Upravit zásobu',
+    description: 'Proveďte bezpečnou ruční změnu množství na konkrétní skladové lokaci.',
+    product: 'Produkt',
+    selectProduct: 'Vyberte produkt',
+    location: 'Lokace',
+    selectLocation: 'Vyberte lokaci',
+    currentQuantity: 'Aktuální množství',
+    delta: 'Změna množství',
+    deltaPlaceholder: 'Například 10 nebo -3',
+    reason: 'Důvod úpravy',
+    reasonPlaceholder: 'Uveďte důvod změny zásoby',
+    resultingQuantity: 'Výsledná zásoba',
+    cancel: 'Zrušit',
+    submit: 'Uložit úpravu',
+    submitting: 'Ukládám…',
+    noInventory: 'Produkt nemá skladový řádek',
+    success: 'Zásoba byla úspěšně upravena.',
+    errors: {
+      productRequired: 'Vyberte produkt.',
+      locationRequired: 'Vyberte lokaci.',
+      deltaInteger: 'Změna musí být celé číslo.',
+      deltaNonZero: 'Změna nesmí být nula.',
+      negativeResult: 'Výsledná zásoba nesmí být záporná.',
+      reasonRequired: 'Zadejte důvod úpravy.',
+      requestFailed: 'Úpravu zásoby se nepodařilo uložit.',
+    },
   },
 };
 
@@ -110,6 +147,8 @@ export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPage
   const [barcodeSearch, setBarcodeSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadInventory = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
@@ -151,6 +190,21 @@ export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPage
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (!successMessage) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setSuccessMessage(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [successMessage]);
+
+  const handleAdjustmentSuccess = useCallback(async () => {
+    setIsAdjustmentOpen(false);
+    setSuccessMessage(copy.adjustment.success);
+    await loadInventory();
+  }, [copy.adjustment.success, loadInventory]);
+
   const filteredItems = useMemo(() => {
     const query = search.toLowerCase().trim();
     const barcodeQuery = barcodeSearch.toLowerCase().trim();
@@ -185,6 +239,13 @@ export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPage
             <p className="mt-2 text-sm text-slate-400">{copy.subtitle}</p>
           </div>
           <InventoryToolbar buttons={[
+            {
+              label: copy.toolbar.adjustStock,
+              onClick: () => {
+                setSuccessMessage(null);
+                setIsAdjustmentOpen(true);
+              },
+            },
             { label: copy.toolbar.newProduct },
             { label: copy.toolbar.stockIn },
             { label: copy.toolbar.stockOut },
@@ -229,6 +290,12 @@ export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPage
           </div>
         </div>
 
+        {successMessage ? (
+          <div role="status" className="mb-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+            {successMessage}
+          </div>
+        ) : null}
+
         {isLoading && items.length === 0 ? (
           <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-8 text-center text-slate-300">
             Načítám inventář…
@@ -255,6 +322,15 @@ export function InventoryPageView({ copy = defaultCopy }: { copy?: InventoryPage
           </>
         )}
       </div>
+
+      {isAdjustmentOpen ? (
+        <InventoryAdjustmentDialog
+          items={items}
+          copy={copy.adjustment}
+          onClose={() => setIsAdjustmentOpen(false)}
+          onSuccess={handleAdjustmentSuccess}
+        />
+      ) : null}
     </main>
   );
 }

@@ -1,0 +1,14 @@
+{
+  "name": "@synergyos/google-ads-integration",
+  "private": true,
+  "version": "0.1.0",
+  "type": "commonjs",
+  "scripts": {
+    "report": "node --env-file=.env report.js",
+    "search-terms": "node --env-file=.env searchTerms.js",
+    "apply-negatives": "node --env-file=.env applyNegativeKeywords.js"
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}
